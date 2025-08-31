@@ -1,0 +1,20 @@
+# Build directories
+build/
+cmake-build-*/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.bak
+
+# Test files
+test-*.py
+
+# Gentoo packaging - belongs in overlay, not main repo
+packaging/gentoo/

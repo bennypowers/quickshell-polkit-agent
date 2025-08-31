@@ -1,0 +1,14 @@
+[Unit]
+Description=Quickshell Polkit Authentication Agent
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+ExecStart=/usr/local/libexec/quickshell-polkit-agent
+Slice=session.slice
+TimeoutStopSec=5sec
+Restart=on-failure
+
+[Install]
+WantedBy=graphical-session.target
