@@ -22,6 +22,8 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QJsonObject>
+#include <QTimer>
+#include <QQueue>
 
 class PolkitWrapper;
 
@@ -48,9 +50,18 @@ private slots:
 
 private:
     void sendMessageToClient(const QJsonObject &message);
+    void sendErrorToClient(const QString &error);
     void handleClientMessage(const QJsonObject &message);
 
     QLocalServer *m_server;
     QLocalSocket *m_currentClient;
     PolkitWrapper *m_polkitWrapper;
+    
+    // Rate limiting
+    QQueue<qint64> m_messageTimestamps;
+    QTimer *m_rateLimitTimer;
+    static constexpr int MAX_MESSAGES_PER_SECOND = 10;
+    static constexpr int RATE_LIMIT_WINDOW_MS = 1000;
+    
+    bool checkRateLimit();
 };

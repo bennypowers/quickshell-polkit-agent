@@ -4,6 +4,7 @@ project(quickshell-polkit-agent VERSION 1.0.0)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+
 # Find Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Network)
 
@@ -22,6 +23,10 @@ add_executable(quickshell-polkit-agent
     src/polkit-wrapper.h
     src/ipc-server.cpp
     src/ipc-server.h
+    src/logging.cpp
+    src/logging.h
+    src/message-validator.cpp
+    src/message-validator.h
 )
 
 target_link_libraries(quickshell-polkit-agent
@@ -40,6 +45,7 @@ target_compile_definitions(quickshell-polkit-agent PRIVATE
     ${POLKIT_QT6_CFLAGS_OTHER}
     ${POLKIT_QT6_AGENT_CFLAGS_OTHER}
 )
+
 
 # Install binary to libexec (internal service location)
 install(TARGETS quickshell-polkit-agent DESTINATION libexec)

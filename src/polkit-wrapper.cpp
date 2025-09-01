@@ -19,6 +19,7 @@
 #include "polkit-wrapper.h"
 #include <polkitqt1-subject.h>
 #include <QDebug>
+#include "logging.h"
 #include <QTimer>
 #include <unistd.h>
 
@@ -44,17 +45,17 @@ bool PolkitWrapper::registerAgent()
     
     if (!sessionId.isEmpty()) {
         subject = PolkitQt1::UnixSessionSubject(sessionId);
-        qDebug() << "Using session subject for session:" << sessionId;
+        qCDebug(polkitAgent) << "Using session subject for session:" << sessionId;
     } else {
         subject = PolkitQt1::UnixProcessSubject(getpid());
-        qDebug() << "Using process subject for PID:" << getpid();
+        qCDebug(polkitAgent) << "Using process subject for PID:" << getpid();
     }
 
     // Register as polkit agent
     bool success = registerListener(subject, "/quickshell/polkit/agent");
 
     if (success) {
-        qDebug() << "Successfully registered as polkit agent";
+        qCDebug(polkitAgent) << "Successfully registered as polkit agent";
         return true;
     } else {
         qCritical() << "Failed to register as polkit agent";
@@ -65,7 +66,7 @@ bool PolkitWrapper::registerAgent()
 void PolkitWrapper::unregisterAgent()
 {
     // The base class handles unregistration in its destructor
-    qDebug() << "Polkit agent will be unregistered on destruction";
+    qCDebug(polkitAgent) << "Polkit agent will be unregistered on destruction";
 }
 
 void PolkitWrapper::checkAuthorization(const QString &actionId, const QString &details)
@@ -77,7 +78,7 @@ void PolkitWrapper::checkAuthorization(const QString &actionId, const QString &d
 
     m_currentActionId = actionId;
     
-    qDebug() << "checkAuthorization called for action:" << actionId;
+    qCDebug(polkitAgent) << "checkAuthorization called for action:" << actionId;
     
     // When used as an agent, we should NOT call m_authority->checkAuthorization() here
     // The polkit daemon will call our initiateAuthentication() method when needed
@@ -87,11 +88,11 @@ void PolkitWrapper::checkAuthorization(const QString &actionId, const QString &d
 
 void PolkitWrapper::cancelAuthorization()
 {
-    qDebug() << "Cancelling authorization check";
+    qCDebug(polkitAgent) << "Cancelling authorization check";
     
     // Cancel any active polkit sessions
     for (auto it = m_activePolkitSessions.begin(); it != m_activePolkitSessions.end(); ++it) {
-        qDebug() << "Cancelling active session for cookie:" << it.key();
+        qCDebug(polkitSensitive) << "Cancelling active session for cookie:" << it.key();
         it.value()->cancel();
         it.value()->deleteLater();
     }
@@ -117,16 +118,16 @@ void PolkitWrapper::onCheckAuthorizationFinished(PolkitQt1::Authority::Result re
     switch (result) {
     case PolkitQt1::Authority::Yes:
         authorized = true;
-        qDebug() << "Authorization granted for" << m_currentActionId;
+        qCDebug(polkitAgent) << "Authorization granted for" << m_currentActionId;
         break;
     case PolkitQt1::Authority::No:
-        qDebug() << "Authorization denied for" << m_currentActionId;
+        qCDebug(polkitAgent) << "Authorization denied for" << m_currentActionId;
         break;
     case PolkitQt1::Authority::Challenge:
-        qDebug() << "Authorization requires challenge for" << m_currentActionId;
+        qCDebug(polkitAgent) << "Authorization requires challenge for" << m_currentActionId;
         break;
     default:
-        qDebug() << "Unknown authorization result for" << m_currentActionId;
+        qCDebug(polkitAgent) << "Unknown authorization result for" << m_currentActionId;
         emit authorizationError("Unknown authorization result");
         return;
     }
@@ -143,7 +144,8 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
                                           const PolkitQt1::Identity::List &identities,
                                           PolkitQt1::Agent::AsyncResult *result)
 {
-    qDebug() << "initiateAuthentication for" << actionId << "cookie:" << cookie;
+    qCDebug(polkitAgent) << "initiateAuthentication for" << actionId;
+    qCDebug(polkitSensitive) << "initiateAuthentication cookie:" << cookie;
     
     // Store the result for this session
     m_activeSessions[cookie] = result;
@@ -151,7 +153,7 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
     // Create polkit session for the first identity
     if (!identities.isEmpty()) {
         PolkitQt1::Identity identity = identities.first();
-        qDebug() << "Creating session for identity:" << identity.toString();
+        qCDebug(polkitAgent) << "Creating session for identity:" << identity.toString();
         
         PolkitQt1::Agent::Session *session = new PolkitQt1::Agent::Session(identity, cookie);
         m_activePolkitSessions[cookie] = session;
@@ -159,7 +161,8 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
         // Connect session signals
         connect(session, &PolkitQt1::Agent::Session::completed,
                 this, [this, cookie, actionId](bool gainedAuthorization) {
-                    qDebug() << "Polkit session completed for cookie:" << cookie << "authorized:" << gainedAuthorization;
+                    qCDebug(polkitAgent) << "Polkit session completed, authorized:" << gainedAuthorization;
+                    qCDebug(polkitSensitive) << "Session cookie:" << cookie;
                     
                     // Complete the AsyncResult for polkit daemon
                     auto resultIt = m_activeSessions.find(cookie);
@@ -185,13 +188,15 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
         
         connect(session, &PolkitQt1::Agent::Session::request,
                 this, [this, cookie, actionId](const QString &request, bool echo) {
-                    qDebug() << "Session password request for cookie:" << cookie;
+                    qCDebug(polkitAgent) << "Session password request";
+                    qCDebug(polkitSensitive) << "Password request for cookie:" << cookie;
                     emit showPasswordRequest(actionId, request, echo, cookie);
                 });
         
         connect(session, &PolkitQt1::Agent::Session::showError,
                 this, [this, cookie, actionId](const QString &text) {
-                    qWarning() << "Session error for cookie:" << cookie << "error:" << text;
+                    qCWarning(polkitAgent) << "Session error:" << text;
+                    qCDebug(polkitSensitive) << "Session error for cookie:" << cookie;
                     
                     // Complete the AsyncResult with error
                     auto resultIt = m_activeSessions.find(cookie);
@@ -213,7 +218,7 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
         
         connect(session, &PolkitQt1::Agent::Session::showInfo,
                 this, [this, cookie](const QString &text) {
-                    qDebug() << "Session info:" << text;
+                    qCDebug(polkitAgent) << "Session info:" << text;
                 });
         
         // Session created but not initiated yet - wait for user action
@@ -228,13 +233,13 @@ bool PolkitWrapper::initiateAuthenticationFinish()
     // This method is part of the PolkitQt1::Agent::Listener interface
     // but is not used in our implementation since we complete results
     // directly in the session completion handlers
-    qDebug() << "initiateAuthenticationFinish called (no-op)";
+    qCDebug(polkitAgent) << "initiateAuthenticationFinish called (no-op)";
     return true;
 }
 
 void PolkitWrapper::cancelAuthentication()
 {
-    qDebug() << "Polkit agent: authentication cancelled";
+    qCDebug(polkitAgent) << "Polkit agent: authentication cancelled";
     
     // Cancel all active sessions
     for (auto it = m_activeSessions.begin(); it != m_activeSessions.end(); ++it) {
@@ -248,7 +253,8 @@ void PolkitWrapper::submitAuthenticationResponse(const QString &cookie, const QS
 {
     auto sessionIt = m_activePolkitSessions.find(cookie);
     if (sessionIt == m_activePolkitSessions.end()) {
-        qWarning() << "No active polkit session for cookie:" << cookie;
+        qCWarning(polkitAgent) << "No active polkit session found";
+        qCDebug(polkitSensitive) << "Missing session for cookie:" << cookie;
         return;
     }
     
@@ -256,11 +262,13 @@ void PolkitWrapper::submitAuthenticationResponse(const QString &cookie, const QS
     
     if (response.isEmpty()) {
         // Empty response means start FIDO authentication
-        qDebug() << "Starting FIDO authentication for cookie:" << cookie;
+        qCDebug(polkitAgent) << "Starting FIDO authentication";
+        qCDebug(polkitSensitive) << "FIDO auth for cookie:" << cookie;
         session->initiate();
     } else {
         // Password authentication - just submit response to existing session
-        qDebug() << "Submitting password response for cookie:" << cookie;
+        qCDebug(polkitAgent) << "Submitting password response";
+        qCDebug(polkitSensitive) << "Password response for cookie:" << cookie;
         session->setResponse(response);
     }
 }

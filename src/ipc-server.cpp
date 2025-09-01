@@ -18,19 +18,23 @@
 
 #include "ipc-server.h"
 #include "polkit-wrapper.h"
+#include "message-validator.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDebug>
+#include "logging.h"
 #include <QStandardPaths>
 #include <QDir>
 #include <QFile>
 #include <QTimer>
+#include <QDateTime>
 
 IPCServer::IPCServer(PolkitWrapper *polkitWrapper, QObject *parent)
     : QObject(parent)
     , m_server(new QLocalServer(this))
     , m_currentClient(nullptr)
     , m_polkitWrapper(polkitWrapper)
+    , m_rateLimitTimer(new QTimer(this))
 {
     // Connect polkit wrapper signals
     connect(m_polkitWrapper, &PolkitWrapper::showAuthDialog,
@@ -76,7 +80,7 @@ bool IPCServer::startServer(const QString &socketName)
         return false;
     }
     
-    qDebug() << "IPC server listening on:" << fullSocketPath;
+    qCDebug(ipcServer) << "IPC server listening on:" << fullSocketPath;
     return true;
 }
 
@@ -85,7 +89,7 @@ void IPCServer::onNewConnection()
     if (m_currentClient) {
         // Only allow one client for now
         auto newClient = m_server->nextPendingConnection();
-        qDebug() << "Rejecting additional client connection";
+        qCDebug(ipcServer) << "Rejecting additional client connection";
         newClient->close();
         newClient->deleteLater();
         return;
@@ -99,10 +103,10 @@ void IPCServer::onNewConnection()
             this, &IPCServer::onClientDataReady);
     connect(m_currentClient, QOverload<QLocalSocket::LocalSocketError>::of(&QLocalSocket::errorOccurred),
             [this](QLocalSocket::LocalSocketError error) {
-                qDebug() << "Client socket error:" << error;
+                qCDebug(ipcServer) << "Client socket error:" << error;
             });
     
-    qDebug() << "Quickshell client connected, state:" << m_currentClient->state();
+    qCDebug(ipcServer) << "Quickshell client connected, state:" << m_currentClient->state();
     
     // Send welcome message to keep connection alive
     QJsonObject welcome;
@@ -114,7 +118,7 @@ void IPCServer::onNewConnection()
 void IPCServer::onClientDisconnected()
 {
     if (m_currentClient) {
-        qDebug() << "Quickshell client disconnected, error:" << m_currentClient->errorString();
+        qCDebug(ipcServer) << "Quickshell client disconnected, error:" << m_currentClient->errorString();
         m_currentClient->deleteLater();
         m_currentClient = nullptr;
     }
@@ -129,7 +133,7 @@ void IPCServer::onClientDataReady()
     QJsonDocument doc = QJsonDocument::fromJson(data, &error);
     
     if (error.error != QJsonParseError::NoError) {
-        qWarning() << "Invalid JSON from client:" << error.errorString();
+        qCWarning(ipcServer) << "Invalid JSON from client:" << error.errorString();
         return;
     }
     
@@ -138,51 +142,100 @@ void IPCServer::onClientDataReady()
 
 void IPCServer::handleClientMessage(const QJsonObject &message)
 {
+    // Check rate limiting first
+    if (!checkRateLimit()) {
+        qCWarning(ipcServer) << "Rate limit exceeded, dropping message";
+        sendErrorToClient("Rate limit exceeded");
+        return;
+    }
+    
+    // Validate message before processing
+    ValidationResult validation = MessageValidator::validateMessage(message);
+    if (!validation.valid) {
+        qCWarning(ipcServer) << "Invalid message from client:" << validation.error;
+        sendErrorToClient("Invalid message: " + validation.error);
+        return;
+    }
+    
     QString type = message["type"].toString();
-    qDebug() << "Received client message type:" << type;
+    qCDebug(ipcServer) << "Received valid client message type:" << type;
     
     if (type == "check_authorization") {
         QString actionId = message["action_id"].toString();
         QString details = message["details"].toString();
         
-        qDebug() << "Client requesting authorization for:" << actionId;
+        qCDebug(ipcServer) << "Client requesting authorization for:" << actionId;
         m_polkitWrapper->checkAuthorization(actionId, details);
         
     } else if (type == "cancel_authorization") {
-        qDebug() << "Client cancelling authorization";
+        qCDebug(ipcServer) << "Client cancelling authorization";
         m_polkitWrapper->cancelAuthorization();
         
     } else if (type == "submit_authentication") {
         QString cookie = message["cookie"].toString();
         QString response = message["response"].toString();
         
-        qDebug() << "Client submitting authentication for cookie:" << cookie << "response length:" << response.length();
+        qCDebug(ipcServer) << "Client submitting authentication, response length:" << response.length();
+        qCDebug(polkitSensitive) << "Auth submission for cookie:" << cookie;
         m_polkitWrapper->submitAuthenticationResponse(cookie, response);
         
     } else {
-        qWarning() << "Unknown message type from client:" << type;
+        // This should never happen due to validation, but keep as safety net
+        qCWarning(ipcServer) << "Unknown message type from client:" << type;
+        sendErrorToClient("Unknown message type: " + type);
     }
 }
 
 void IPCServer::sendMessageToClient(const QJsonObject &message)
 {
-    qDebug() << "sendMessageToClient called with message:" << message;
+    qCDebug(ipcServer) << "sendMessageToClient called with message:" << message;
     
     if (!m_currentClient) {
-        qDebug() << "No client connected";
+        qCDebug(ipcServer) << "No client connected";
         return;
     }
     
     if (m_currentClient->state() != QLocalSocket::ConnectedState) {
-        qDebug() << "Client not in connected state, current state:" << m_currentClient->state();
+        qCDebug(ipcServer) << "Client not in connected state, current state:" << m_currentClient->state();
         return;
     }
     
     QJsonDocument doc(message);
     QByteArray data = doc.toJson(QJsonDocument::Compact);
-    qDebug() << "Sending to client:" << data;
+    qCDebug(ipcServer) << "Sending to client:" << data;
     m_currentClient->write(data + "\n");  // Add newline for SplitParser
     m_currentClient->flush();
+}
+
+void IPCServer::sendErrorToClient(const QString &error)
+{
+    QJsonObject errorMessage;
+    errorMessage["type"] = "error";
+    errorMessage["error"] = error;
+    sendMessageToClient(errorMessage);
+}
+
+bool IPCServer::checkRateLimit()
+{
+    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+    
+    // Add current message timestamp
+    m_messageTimestamps.enqueue(currentTime);
+    
+    // Remove timestamps older than the window
+    while (!m_messageTimestamps.isEmpty() && 
+           (currentTime - m_messageTimestamps.head()) > RATE_LIMIT_WINDOW_MS) {
+        m_messageTimestamps.dequeue();
+    }
+    
+    // Check if we exceed the rate limit
+    if (m_messageTimestamps.size() > MAX_MESSAGES_PER_SECOND) {
+        qCWarning(ipcServer) << "Rate limit exceeded:" << m_messageTimestamps.size() 
+                           << "messages in last" << RATE_LIMIT_WINDOW_MS << "ms";
+        return false;
+    }
+    
+    return true;
 }
 
 void IPCServer::onShowAuthDialog(const QString &actionId, const QString &message, const QString &iconName, const QString &cookie)
