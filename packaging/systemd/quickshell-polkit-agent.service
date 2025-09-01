@@ -11,34 +11,18 @@ ConditionPathExists=/usr/bin/quickshell
 [Service]
 Type=exec
 ExecStart=/usr/libexec/quickshell-polkit-agent
-ExecStopPost=/bin/rm -f /run/user/%%i/quickshell-polkit*
+ExecStopPost=/bin/rm -f ${RUNTIME_DIRECTORY}/quickshell-polkit*
 Slice=session.slice
 TimeoutStartSec=10sec
 TimeoutStopSec=5sec
 Restart=on-failure
 RestartSec=2sec
 StartLimitBurst=5
-StartLimitIntervalSec=60sec
+StartLimitIntervalSec=60
 
 # Security hardening
 RuntimeDirectory=quickshell-polkit
 RuntimeDirectoryMode=0700
-PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-NoNewPrivileges=yes
-MemoryDenyWriteExecute=yes
-RestrictRealtime=yes
-RestrictSUIDSGID=yes
-LockPersonality=yes
-ProtectHostname=yes
-ProtectClock=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectKernelLogs=yes
-ProtectControlGroups=yes
-RestrictNamespaces=yes
-SystemCallArchitectures=native
 
 # Resource limits
 MemoryMax=64M

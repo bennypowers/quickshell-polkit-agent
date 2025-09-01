@@ -88,17 +88,32 @@ bool IPCServer::startServer()
         fullSocketPath = customSocketPath;
         qCDebug(ipcServer) << "Using custom socket path from environment:" << fullSocketPath;
     } else {
-        // Create socket in user runtime directory
-        QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
-        if (!runtimeDir.isEmpty()) {
-            fullSocketPath = QString("%1/quickshell-polkit").arg(runtimeDir);
+        // Check if systemd provided RUNTIME_DIRECTORY (when run as service)
+        QString runtimeDirectory = qEnvironmentVariable("RUNTIME_DIRECTORY");
+        if (!runtimeDirectory.isEmpty()) {
+            // systemd provides absolute path to our runtime directory
+            fullSocketPath = QString("%1/quickshell-polkit").arg(runtimeDirectory);
+            qCDebug(ipcServer) << "Using RUNTIME_DIRECTORY:" << runtimeDirectory << "-> full path:" << fullSocketPath;
         } else {
-            fullSocketPath = QString("/tmp/quickshell-polkit-%1").arg(getuid());
+            // Fallback: create socket in user runtime directory
+            QString runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+            if (!runtimeDir.isEmpty()) {
+                fullSocketPath = QString("%1/quickshell-polkit/quickshell-polkit").arg(runtimeDir);
+                
+                // Ensure parent directory exists (only create if it doesn't exist)
+                QFileInfo socketInfo(fullSocketPath);
+                QString parentPath = socketInfo.absolutePath();
+                if (!QDir(parentPath).exists()) {
+                    QDir().mkpath(parentPath);
+                }
+            } else {
+                fullSocketPath = QString("/tmp/quickshell-polkit-%1/quickshell-polkit").arg(getuid());
+                
+                // Ensure parent directory exists
+                QFileInfo socketInfo(fullSocketPath);
+                QDir().mkpath(socketInfo.absolutePath());
+            }
         }
-        
-        // Ensure parent directory exists
-        QFileInfo socketInfo(fullSocketPath);
-        QDir().mkpath(socketInfo.absolutePath());
     }
     
     // Remove existing socket if it exists

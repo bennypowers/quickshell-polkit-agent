@@ -48,9 +48,9 @@ Item {
         property string socketPath: {
             var runtimeDir = Quickshell.env("XDG_RUNTIME_DIR")
             if (runtimeDir) {
-                return runtimeDir + "/quickshell-polkit"
+                return runtimeDir + "/quickshell-polkit/quickshell-polkit"
             } else {
-                return "/tmp/quickshell-polkit-" + Quickshell.env("UID")
+                return "/tmp/quickshell-polkit-" + Quickshell.env("UID") + "/quickshell-polkit"
             }
         }
 
