@@ -272,6 +272,11 @@ void IPCServer::handleClientMessage(const QJsonObject &message)
         SecurityManager::auditLog("AUTH_CANCEL", "Client cancelled authentication", "CANCELLED");
         m_polkitWrapper->cancelAuthorization();
         
+        // Send cancellation acknowledgment to client
+        QJsonObject cancelResponse;
+        cancelResponse["type"] = "cancel_acknowledgment";
+        sendMessageToClient(cancelResponse);
+        
     } else if (type == "submit_authentication") {
         QString cookie = message["cookie"].toString();
         QString response = message["response"].toString();
