@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 # Find Qt6 Test module
-find_package(Qt6 REQUIRED COMPONENTS Test Core Network)
+find_package(Qt6 REQUIRED COMPONENTS Test Core Network Qml)
 
 # Enable MOC processing for tests
 set(CMAKE_AUTOMOC ON)
@@ -39,18 +39,18 @@ add_executable(test-simple-integration
 target_link_libraries(test-simple-integration Qt6::Test Qt6::Core Qt6::Network)
 add_test(NAME SimpleIntegration COMMAND test-simple-integration)
 
-# End-to-end test for current socat implementation
-add_executable(test-e2e-current
-    test-e2e-current.cpp
+# Comprehensive E2E validation test for PolkitAgent LocalSocket implementation
+add_executable(test-localsocket-validation
+    test-localsocket-validation.cpp
     ../src/security.cpp
     ../src/logging.cpp
 )
-target_link_libraries(test-e2e-current Qt6::Test Qt6::Core Qt6::Network)
-add_test(NAME E2ECurrent COMMAND test-e2e-current)
+target_link_libraries(test-localsocket-validation Qt6::Test Qt6::Core Qt6::Network)
+add_test(NAME LocalSocketValidation COMMAND test-localsocket-validation)
 
 # Add custom target to run all tests
 add_custom_target(run-tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test-message-validator test-security test-simple-integration test-e2e-current
+    DEPENDS test-message-validator test-security test-simple-integration test-localsocket-validation
     COMMENT "Running all tests"
 )

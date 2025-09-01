@@ -228,5 +228,4 @@ quickshell-polkit-agent/
 - polkit-qt6-core-1
 - polkit-qt6-agent-1
 - quickshell (for UI components)
-- socat (for Unix socket communication)
 
