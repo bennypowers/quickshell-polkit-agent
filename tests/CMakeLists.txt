@@ -39,9 +39,18 @@ add_executable(test-simple-integration
 target_link_libraries(test-simple-integration Qt6::Test Qt6::Core Qt6::Network)
 add_test(NAME SimpleIntegration COMMAND test-simple-integration)
 
+# End-to-end test for current socat implementation
+add_executable(test-e2e-current
+    test-e2e-current.cpp
+    ../src/security.cpp
+    ../src/logging.cpp
+)
+target_link_libraries(test-e2e-current Qt6::Test Qt6::Core Qt6::Network)
+add_test(NAME E2ECurrent COMMAND test-e2e-current)
+
 # Add custom target to run all tests
 add_custom_target(run-tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test-message-validator test-security test-simple-integration
+    DEPENDS test-message-validator test-security test-simple-integration test-e2e-current
     COMMENT "Running all tests"
 )

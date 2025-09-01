@@ -29,6 +29,7 @@
 #include <QFile>
 #include <QTimer>
 #include <QDateTime>
+#include <unistd.h>
 
 IPCServer::IPCServer(PolkitWrapper *polkitWrapper, QObject *parent)
     : QObject(parent)
@@ -78,17 +79,27 @@ IPCServer::~IPCServer()
 
 bool IPCServer::startServer(const QString &socketName)
 {
-    // Create socket in user runtime directory
-    QString socketPath = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
-    if (socketPath.isEmpty()) {
-        socketPath = QString("/tmp/quickshell-polkit-%1").arg(getuid());
+    // Check for custom socket path in environment (for testing)
+    QString customSocketPath = qEnvironmentVariable("QUICKSHELL_POLKIT_SOCKET");
+    QString fullSocketPath;
+    
+    if (!customSocketPath.isEmpty()) {
+        // Use custom socket path for testing
+        fullSocketPath = customSocketPath;
+        qCDebug(ipcServer) << "Using custom socket path from environment:" << fullSocketPath;
+    } else {
+        // Create socket in user runtime directory
+        QString socketPath = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+        if (socketPath.isEmpty()) {
+            socketPath = QString("/tmp/quickshell-polkit-%1").arg(getuid());
+        }
+        
+        // Create the quickshell-polkit subdirectory
+        QString socketDir = QString("%1/quickshell-polkit").arg(socketPath);
+        QDir().mkpath(socketDir);
+        
+        fullSocketPath = QString("%1/%2").arg(socketDir, socketName);
     }
-    
-    // Create the quickshell-polkit subdirectory
-    QString socketDir = QString("%1/quickshell-polkit").arg(socketPath);
-    QDir().mkpath(socketDir);
-    
-    QString fullSocketPath = QString("%1/%2").arg(socketDir, socketName);
     
     // Remove existing socket if it exists
     QFile::remove(fullSocketPath);

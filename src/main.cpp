@@ -48,8 +48,11 @@ int main(int argc, char *argv[])
     // Create polkit wrapper
     PolkitWrapper polkitWrapper;
     
-    // Register as polkit agent
-    if (!polkitWrapper.registerAgent()) {
+    // Check if running in test mode (skip polkit registration)
+    bool testMode = !qEnvironmentVariable("QUICKSHELL_POLKIT_SOCKET").isEmpty();
+    
+    // Register as polkit agent (skip in test mode)
+    if (!testMode && !polkitWrapper.registerAgent()) {
         qCritical() << "Failed to register as polkit agent - exiting";
         return 1;
     }
@@ -59,6 +62,10 @@ int main(int argc, char *argv[])
     if (!server.startServer()) {
         qCritical() << "Failed to start IPC server - exiting";
         return 1;
+    }
+    
+    if (testMode) {
+        qDebug() << "Running in test mode - polkit registration skipped";
     }
     
     qDebug() << "Quickshell Polkit Agent ready - registered as system polkit agent";
