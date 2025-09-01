@@ -104,14 +104,21 @@ bool IPCServer::startServer()
                 QFileInfo socketInfo(fullSocketPath);
                 QString parentPath = socketInfo.absolutePath();
                 if (!QDir(parentPath).exists()) {
-                    QDir().mkpath(parentPath);
+                    if (!QDir().mkpath(parentPath)) {
+                        qCritical() << "Failed to create socket directory:" << parentPath;
+                        return false;
+                    }
                 }
             } else {
                 fullSocketPath = QString("/tmp/quickshell-polkit-%1/quickshell-polkit").arg(getuid());
                 
                 // Ensure parent directory exists
                 QFileInfo socketInfo(fullSocketPath);
-                QDir().mkpath(socketInfo.absolutePath());
+                QString parentPath = socketInfo.absolutePath();
+                if (!QDir().mkpath(parentPath)) {
+                    qCritical() << "Failed to create socket directory:" << parentPath;
+                    return false;
+                }
             }
         }
     }
