@@ -1,5 +1,6 @@
 # Build directories
 build/
+build-*/
 cmake-build-*/
 
 # IDE files
@@ -13,8 +14,18 @@ cmake-build-*/
 *.tmp
 *.bak
 
-# Test files
+# Qt/MOC generated files
+*_autogen/
+moc_*.cpp
+moc_*.h
+*.moc
+ui_*.h
+qrc_*.cpp
+
+# Test files and output
 test-*.py
+*.log
+Testing/
 
 # Gentoo packaging - belongs in overlay, not main repo
 packaging/gentoo/

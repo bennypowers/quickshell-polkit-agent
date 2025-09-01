@@ -56,3 +56,9 @@ install(TARGETS quickshell-polkit-agent DESTINATION libexec)
 install(FILES packaging/systemd/quickshell-polkit-agent.service
               packaging/systemd/quickshell-polkit-agent-debug.service
         DESTINATION lib/systemd/user)
+
+# Add tests subdirectory (optional)
+option(BUILD_TESTS "Build unit tests" OFF)
+if(BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
