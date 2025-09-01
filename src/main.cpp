@@ -22,6 +22,7 @@
 
 #include "polkit-wrapper.h"
 #include "ipc-server.h"
+#include "security.h"
 
 void signalHandler(int signal)
 {
@@ -40,6 +41,9 @@ int main(int argc, char *argv[])
     signal(SIGTERM, signalHandler);
     
     qDebug() << "Starting Quickshell Polkit Agent...";
+    
+    // Initialize security manager
+    SecurityManager::initialize();
     
     // Create polkit wrapper
     PolkitWrapper polkitWrapper;

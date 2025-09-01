@@ -27,6 +27,8 @@ add_executable(quickshell-polkit-agent
     src/logging.h
     src/message-validator.cpp
     src/message-validator.h
+    src/security.cpp
+    src/security.h
 )
 
 target_link_libraries(quickshell-polkit-agent

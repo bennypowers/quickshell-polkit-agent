@@ -42,6 +42,7 @@ private slots:
     void onClientDisconnected();
     void onClientDataReady();
     void onHeartbeatTimeout();
+    void onSessionTimeout();
     
     // Slots for polkit wrapper signals
     void onShowAuthDialog(const QString &actionId, const QString &message, const QString &iconName, const QString &cookie);
@@ -72,9 +73,14 @@ private:
     static constexpr int HEARTBEAT_INTERVAL_MS = 30000; // 30 seconds
     static constexpr int CONNECTION_TIMEOUT_MS = 60000; // 60 seconds
     
+    // Security and session management
+    qint64 m_sessionStartTime;
+    QTimer *m_sessionTimeoutTimer;
+    
     bool checkRateLimit();
     void startHeartbeat();
     void stopHeartbeat();
+    void resetSessionTimeout();
     void queueMessage(const QJsonObject &message);
     void replayQueuedMessages();
 };

@@ -19,6 +19,7 @@
 #include "ipc-server.h"
 #include "polkit-wrapper.h"
 #include "message-validator.h"
+#include "security.h"
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDebug>
@@ -38,6 +39,8 @@ IPCServer::IPCServer(PolkitWrapper *polkitWrapper, QObject *parent)
     , m_heartbeatTimer(new QTimer(this))
     , m_lastHeartbeat(0)
     , m_clientConnectionVersion(0)
+    , m_sessionStartTime(0)
+    , m_sessionTimeoutTimer(new QTimer(this))
 {
     // Connect polkit wrapper signals
     connect(m_polkitWrapper, &PolkitWrapper::showAuthDialog,
@@ -58,6 +61,12 @@ IPCServer::IPCServer(PolkitWrapper *polkitWrapper, QObject *parent)
             this, &IPCServer::onHeartbeatTimeout);
     m_heartbeatTimer->setSingleShot(false);
     m_heartbeatTimer->setInterval(HEARTBEAT_INTERVAL_MS);
+    
+    // Setup session timeout timer
+    connect(m_sessionTimeoutTimer, &QTimer::timeout,
+            this, &IPCServer::onSessionTimeout);
+    m_sessionTimeoutTimer->setSingleShot(false);
+    m_sessionTimeoutTimer->setInterval(SecurityManager::SESSION_TIMEOUT_MS);
 }
 
 IPCServer::~IPCServer()
@@ -120,9 +129,13 @@ void IPCServer::onNewConnection()
     // Increment connection version to detect client restarts
     m_clientConnectionVersion++;
     m_lastHeartbeat = QDateTime::currentMSecsSinceEpoch();
+    m_sessionStartTime = SecurityManager::getCurrentTimestamp();
     
-    // Start heartbeat monitoring
+    // Start heartbeat and session monitoring
     startHeartbeat();
+    m_sessionTimeoutTimer->start();
+    
+    SecurityManager::auditLog("CLIENT_CONNECTED", QString("version=%1").arg(m_clientConnectionVersion), "SUCCESS");
     
     // Send welcome message with connection version
     QJsonObject welcome;
@@ -142,9 +155,11 @@ void IPCServer::onClientDisconnected()
         m_currentClient->deleteLater();
         m_currentClient = nullptr;
         
-        // Stop heartbeat monitoring
+        // Stop heartbeat and session monitoring
         stopHeartbeat();
+        m_sessionTimeoutTimer->stop();
         
+        SecurityManager::auditLog("CLIENT_DISCONNECTED", "Session ended", "SUCCESS");
         qCDebug(ipcServer) << "Client connection cleaned up, ready for reconnection";
     }
 }
@@ -171,6 +186,17 @@ void IPCServer::handleClientMessage(const QJsonObject &message)
     if (!checkRateLimit()) {
         qCWarning(ipcServer) << "Rate limit exceeded, dropping message";
         sendErrorToClient("Rate limit exceeded");
+        SecurityManager::auditLog("RATE_LIMIT", "Client exceeded message rate limit", "BLOCKED");
+        return;
+    }
+    
+    // Check session timeout
+    if (SecurityManager::isSessionExpired(m_sessionStartTime)) {
+        qCWarning(ipcServer) << "Session expired, disconnecting client";
+        SecurityManager::auditLog("SESSION_EXPIRED", "Client session timed out", "DISCONNECTED");
+        if (m_currentClient) {
+            m_currentClient->disconnectFromServer();
+        }
         return;
     }
     
@@ -179,7 +205,18 @@ void IPCServer::handleClientMessage(const QJsonObject &message)
     if (!validation.valid) {
         qCWarning(ipcServer) << "Invalid message from client:" << validation.error;
         sendErrorToClient("Invalid message: " + validation.error);
+        SecurityManager::auditLog("MESSAGE_VALIDATION", validation.error, "REJECTED");
         return;
+    }
+    
+    // Optional HMAC verification (for future enhanced security)
+    if (message.contains("hmac")) {
+        if (!SecurityManager::verifyMessage(message)) {
+            qCWarning(ipcServer) << "HMAC verification failed";
+            sendErrorToClient("Message authentication failed");
+            return;
+        }
+        qCDebug(ipcServer) << "Message HMAC verified successfully";
     }
     
     QString type = message["type"].toString();
@@ -190,10 +227,16 @@ void IPCServer::handleClientMessage(const QJsonObject &message)
         QString details = message["details"].toString();
         
         qCDebug(ipcServer) << "Client requesting authorization for:" << actionId;
+        SecurityManager::auditLog("AUTH_REQUEST", QString("action=%1").arg(actionId), "PROCESSING");
+        
+        // Reset session timeout on legitimate auth activity
+        resetSessionTimeout();
+        
         m_polkitWrapper->checkAuthorization(actionId, details);
         
     } else if (type == "cancel_authorization") {
         qCDebug(ipcServer) << "Client cancelling authorization";
+        SecurityManager::auditLog("AUTH_CANCEL", "Client cancelled authentication", "CANCELLED");
         m_polkitWrapper->cancelAuthorization();
         
     } else if (type == "submit_authentication") {
@@ -202,12 +245,20 @@ void IPCServer::handleClientMessage(const QJsonObject &message)
         
         qCDebug(ipcServer) << "Client submitting authentication, response length:" << response.length();
         qCDebug(polkitSensitive) << "Auth submission for cookie:" << cookie;
+        SecurityManager::auditLog("AUTH_SUBMIT", QString("response_length=%1").arg(response.length()), "SUBMITTED");
+        
+        // Reset session timeout on auth submission activity
+        resetSessionTimeout();
+        
         m_polkitWrapper->submitAuthenticationResponse(cookie, response);
         
     } else if (type == "heartbeat") {
         // Update last heartbeat timestamp
         m_lastHeartbeat = QDateTime::currentMSecsSinceEpoch();
         qCDebug(ipcServer) << "Received heartbeat from client";
+        
+        // Reset session timeout on heartbeat (shows client is active)
+        resetSessionTimeout();
         
         // Send heartbeat response
         QJsonObject heartbeatResponse;
@@ -284,6 +335,10 @@ void IPCServer::onShowAuthDialog(const QString &actionId, const QString &message
 
 void IPCServer::onAuthorizationResult(bool authorized, const QString &actionId)
 {
+    // Audit log the authorization result
+    QString result = authorized ? "GRANTED" : "DENIED";
+    SecurityManager::auditLog("AUTH_RESULT", QString("action=%1").arg(actionId), result);
+    
     QJsonObject response;
     response["type"] = "authorization_result";
     response["authorized"] = authorized;
@@ -294,6 +349,9 @@ void IPCServer::onAuthorizationResult(bool authorized, const QString &actionId)
 
 void IPCServer::onAuthorizationError(const QString &error)
 {
+    // Audit log the authorization error
+    SecurityManager::auditLog("AUTH_ERROR", QString("error=\"%1\"").arg(error), "ERROR");
+    
     QJsonObject response;
     response["type"] = "authorization_error";
     response["error"] = error;
@@ -323,6 +381,13 @@ void IPCServer::stopHeartbeat()
 {
     qCDebug(ipcServer) << "Stopping heartbeat monitoring";
     m_heartbeatTimer->stop();
+}
+
+void IPCServer::resetSessionTimeout()
+{
+    // Reset session start time to extend the session
+    m_sessionStartTime = SecurityManager::getCurrentTimestamp();
+    qCDebug(ipcServer) << "Session timeout reset due to activity";
 }
 
 void IPCServer::onHeartbeatTimeout()
@@ -382,6 +447,19 @@ void IPCServer::replayQueuedMessages()
     
     if (m_currentClient) {
         m_currentClient->flush();
+    }
+}
+
+void IPCServer::onSessionTimeout()
+{
+    if (SecurityManager::isSessionExpired(m_sessionStartTime)) {
+        qCWarning(ipcServer) << "Session timeout reached, disconnecting client";
+        SecurityManager::auditLog("SESSION_TIMEOUT", "Maximum session duration exceeded", "DISCONNECTED");
+        
+        if (m_currentClient) {
+            sendErrorToClient("Session timeout - please reconnect");
+            m_currentClient->disconnectFromServer();
+        }
     }
 }
 
