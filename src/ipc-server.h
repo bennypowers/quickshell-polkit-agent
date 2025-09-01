@@ -35,7 +35,7 @@ public:
     explicit IPCServer(PolkitWrapper *polkitWrapper, QObject *parent = nullptr);
     ~IPCServer();
 
-    bool startServer(const QString &socketName = "quickshell-polkit");
+    bool startServer();
 
 private slots:
     void onNewConnection();
