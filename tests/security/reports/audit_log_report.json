@@ -1,6 +1,6 @@
 {
   "test_type": "Audit Log Security",
-  "timestamp": "2025-09-01 20:26:01",
+  "timestamp": "2025-09-01 20:27:40",
   "summary": {
     "total_tests": 5,
     "passed": 4,
@@ -11,16 +11,16 @@
   "results": [
     {
       "test": "Log rotation under high load",
-      "test_directory": "/tmp/audit_log_test__u53a5m7",
+      "test_directory": "/tmp/audit_log_test_wvo852ip",
       "max_log_size_bytes": 1048576,
       "max_log_files": 5,
       "entries_attempted": 10000,
       "entries_written": 10000,
-      "test_duration_seconds": 3.630341053009033,
+      "test_duration_seconds": 3.6983394622802734,
       "log_files_created": 2,
       "total_log_size_bytes": 1138894,
       "average_entry_size": 113.8894,
-      "entries_per_second": 2754.562134516654,
+      "entries_per_second": 2703.9162040129036,
       "status": "PASS",
       "log_rotation_occurred": true,
       "rotation_status": "WORKING"
@@ -40,7 +40,7 @@
       "total_attempts": 1000,
       "successful_writes": 1000,
       "failed_writes": 0,
-      "test_duration_seconds": 0.16910243034362793,
+      "test_duration_seconds": 0.1739640235900879,
       "log_lines_written": 1000,
       "corrupted_lines": 0,
       "integrity_rate": "100.0%",
@@ -50,11 +50,11 @@
       "test": "Log flooding resistance",
       "flood_entries_attempted": 50000,
       "entries_actually_written": 50000,
-      "flood_duration_seconds": 18.780399084091187,
+      "flood_duration_seconds": 18.530735731124878,
       "total_log_size_bytes": 5388962,
       "max_allowed_size_bytes": 10485760,
       "log_files_created": 1,
-      "flooding_rate_per_second": 2662.3502395300447,
+      "flooding_rate_per_second": 2698.219904783286,
       "status": "TESTED",
       "flood_resistance": "GOOD",
       "security_status": "PROTECTED"
@@ -64,22 +64,22 @@
       "tampering_tests": [
         {
           "tampering_type": "Line deletion",
-          "initial_checksum": "9d79cbdc55893bcb44d1cd9c44a80d1758daf782a2f057f9d44f7e2f49ba1208",
-          "post_tamper_checksum": "2f090f39cdb0ab50233d70c208b6bcd82a4c77b9f0022e4c449cc4b7b6934bd2",
+          "initial_checksum": "601a03fa014c5df5109b0763d09a2c689437b0bb1cb061a196e4dce6060a0b8c",
+          "post_tamper_checksum": "9836357345fe1729175170172e97c6db050004b125101eebdd6888ef22ae0617",
           "tampering_detected": true,
           "status": "DETECTED"
         },
         {
           "tampering_type": "Line modification",
-          "initial_checksum": "9d79cbdc55893bcb44d1cd9c44a80d1758daf782a2f057f9d44f7e2f49ba1208",
-          "post_tamper_checksum": "b6f41ea7028533adba1fb4717689f631841a316cfe96c57c448e1243c3bafc96",
+          "initial_checksum": "601a03fa014c5df5109b0763d09a2c689437b0bb1cb061a196e4dce6060a0b8c",
+          "post_tamper_checksum": "bd2a40c760d26e8c7f6f862b4497aa15e689f87146947f9dd4e053c469a0b713",
           "tampering_detected": true,
           "status": "DETECTED"
         },
         {
           "tampering_type": "Line insertion",
-          "initial_checksum": "9d79cbdc55893bcb44d1cd9c44a80d1758daf782a2f057f9d44f7e2f49ba1208",
-          "post_tamper_checksum": "79aed822b8a66835c8eb0c4b57b64055cd0735a21e2e95a4dba9645ba1662ca3",
+          "initial_checksum": "601a03fa014c5df5109b0763d09a2c689437b0bb1cb061a196e4dce6060a0b8c",
+          "post_tamper_checksum": "8903f1608a341add12fb713aaa0fa5e927682d3bce432527d690e6335d56ae45",
           "tampering_detected": true,
           "status": "DETECTED"
         }
