@@ -259,9 +259,8 @@ void PolkitWrapper::submitAuthenticationResponse(const QString &cookie, const QS
         qDebug() << "Starting FIDO authentication for cookie:" << cookie;
         session->initiate();
     } else {
-        // Password authentication - initiate session and submit response
-        qDebug() << "Starting password authentication for cookie:" << cookie;
-        session->initiate();
+        // Password authentication - just submit response to existing session
+        qDebug() << "Submitting password response for cookie:" << cookie;
         session->setResponse(response);
     }
 }
