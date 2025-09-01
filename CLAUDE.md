@@ -1,1 +1,2 @@
 - Add all of step 4 and the improved step 3 to the plan.
+- When adding multiple features/fixes, pause after each one so I can commit them

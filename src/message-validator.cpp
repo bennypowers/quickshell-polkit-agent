@@ -4,7 +4,8 @@
 const QStringList MessageValidator::VALID_MESSAGE_TYPES = {
     "check_authorization",
     "cancel_authorization", 
-    "submit_authentication"
+    "submit_authentication",
+    "heartbeat"
 };
 
 ValidationResult MessageValidator::validateMessage(const QJsonObject &message)
@@ -24,6 +25,8 @@ ValidationResult MessageValidator::validateMessage(const QJsonObject &message)
         return validateCancelAuthorization(message);
     } else if (type == "submit_authentication") {
         return validateSubmitAuthentication(message);
+    } else if (type == "heartbeat") {
+        return validateHeartbeat(message);
     }
     
     return ValidationResult::failure("Unknown message type: " + type);
@@ -98,6 +101,29 @@ ValidationResult MessageValidator::validateSubmitAuthentication(const QJsonObjec
     for (QChar c : cookie) {
         if (!c.isLetterOrNumber() && c != '-' && c != '_') {
             return ValidationResult::failure("cookie contains invalid characters");
+        }
+    }
+    
+    return ValidationResult::success();
+}
+
+ValidationResult MessageValidator::validateHeartbeat(const QJsonObject &message)
+{
+    // Heartbeat has no additional fields to validate besides type
+    // Just ensure no unexpected fields are present
+    QStringList allowedKeys = {"type", "timestamp"};
+    
+    for (auto it = message.begin(); it != message.end(); ++it) {
+        if (!allowedKeys.contains(it.key())) {
+            return ValidationResult::failure("Unexpected field in heartbeat: " + it.key());
+        }
+    }
+    
+    // If timestamp is provided, validate it's a number
+    if (message.contains("timestamp")) {
+        QJsonValue timestamp = message["timestamp"];
+        if (!timestamp.isDouble()) {
+            return ValidationResult::failure("timestamp must be a number");
         }
     }
     

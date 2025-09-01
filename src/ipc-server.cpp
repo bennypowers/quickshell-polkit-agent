@@ -35,6 +35,9 @@ IPCServer::IPCServer(PolkitWrapper *polkitWrapper, QObject *parent)
     , m_currentClient(nullptr)
     , m_polkitWrapper(polkitWrapper)
     , m_rateLimitTimer(new QTimer(this))
+    , m_heartbeatTimer(new QTimer(this))
+    , m_lastHeartbeat(0)
+    , m_clientConnectionVersion(0)
 {
     // Connect polkit wrapper signals
     connect(m_polkitWrapper, &PolkitWrapper::showAuthDialog,
@@ -49,6 +52,12 @@ IPCServer::IPCServer(PolkitWrapper *polkitWrapper, QObject *parent)
     // Connect server signals
     connect(m_server, &QLocalServer::newConnection,
             this, &IPCServer::onNewConnection);
+    
+    // Setup heartbeat timer
+    connect(m_heartbeatTimer, &QTimer::timeout,
+            this, &IPCServer::onHeartbeatTimeout);
+    m_heartbeatTimer->setSingleShot(false);
+    m_heartbeatTimer->setInterval(HEARTBEAT_INTERVAL_MS);
 }
 
 IPCServer::~IPCServer()
@@ -108,11 +117,22 @@ void IPCServer::onNewConnection()
     
     qCDebug(ipcServer) << "Quickshell client connected, state:" << m_currentClient->state();
     
-    // Send welcome message to keep connection alive
+    // Increment connection version to detect client restarts
+    m_clientConnectionVersion++;
+    m_lastHeartbeat = QDateTime::currentMSecsSinceEpoch();
+    
+    // Start heartbeat monitoring
+    startHeartbeat();
+    
+    // Send welcome message with connection version
     QJsonObject welcome;
     welcome["type"] = "welcome";
     welcome["message"] = "Connected to quickshell-polkit-agent";
+    welcome["connection_version"] = m_clientConnectionVersion;
     sendMessageToClient(welcome);
+    
+    // Replay any queued messages
+    replayQueuedMessages();
 }
 
 void IPCServer::onClientDisconnected()
@@ -121,6 +141,11 @@ void IPCServer::onClientDisconnected()
         qCDebug(ipcServer) << "Quickshell client disconnected, error:" << m_currentClient->errorString();
         m_currentClient->deleteLater();
         m_currentClient = nullptr;
+        
+        // Stop heartbeat monitoring
+        stopHeartbeat();
+        
+        qCDebug(ipcServer) << "Client connection cleaned up, ready for reconnection";
     }
 }
 
@@ -179,6 +204,17 @@ void IPCServer::handleClientMessage(const QJsonObject &message)
         qCDebug(polkitSensitive) << "Auth submission for cookie:" << cookie;
         m_polkitWrapper->submitAuthenticationResponse(cookie, response);
         
+    } else if (type == "heartbeat") {
+        // Update last heartbeat timestamp
+        m_lastHeartbeat = QDateTime::currentMSecsSinceEpoch();
+        qCDebug(ipcServer) << "Received heartbeat from client";
+        
+        // Send heartbeat response
+        QJsonObject heartbeatResponse;
+        heartbeatResponse["type"] = "heartbeat_ack";
+        heartbeatResponse["timestamp"] = m_lastHeartbeat;
+        sendMessageToClient(heartbeatResponse);
+        
     } else {
         // This should never happen due to validation, but keep as safety net
         qCWarning(ipcServer) << "Unknown message type from client:" << type;
@@ -190,13 +226,9 @@ void IPCServer::sendMessageToClient(const QJsonObject &message)
 {
     qCDebug(ipcServer) << "sendMessageToClient called with message:" << message;
     
-    if (!m_currentClient) {
-        qCDebug(ipcServer) << "No client connected";
-        return;
-    }
-    
-    if (m_currentClient->state() != QLocalSocket::ConnectedState) {
-        qCDebug(ipcServer) << "Client not in connected state, current state:" << m_currentClient->state();
+    if (!m_currentClient || m_currentClient->state() != QLocalSocket::ConnectedState) {
+        qCDebug(ipcServer) << "Client not connected, queueing message";
+        queueMessage(message);
         return;
     }
     
@@ -279,5 +311,77 @@ void IPCServer::onShowPasswordRequest(const QString &actionId, const QString &re
     response["cookie"] = cookie;
     
     sendMessageToClient(response);
+}
+
+void IPCServer::startHeartbeat()
+{
+    qCDebug(ipcServer) << "Starting heartbeat monitoring";
+    m_heartbeatTimer->start();
+}
+
+void IPCServer::stopHeartbeat()
+{
+    qCDebug(ipcServer) << "Stopping heartbeat monitoring";
+    m_heartbeatTimer->stop();
+}
+
+void IPCServer::onHeartbeatTimeout()
+{
+    qint64 currentTime = QDateTime::currentMSecsSinceEpoch();
+    qint64 timeSinceLastHeartbeat = currentTime - m_lastHeartbeat;
+    
+    if (timeSinceLastHeartbeat > CONNECTION_TIMEOUT_MS) {
+        qCWarning(ipcServer) << "Client heartbeat timeout after" << timeSinceLastHeartbeat << "ms";
+        
+        if (m_currentClient) {
+            m_currentClient->disconnectFromServer();
+        }
+    }
+}
+
+void IPCServer::queueMessage(const QJsonObject &message)
+{
+    QString type = message["type"].toString();
+    
+    // Don't queue certain message types (heartbeat acks, errors, welcome)
+    if (type == "heartbeat_ack" || type == "error" || type == "welcome") {
+        qCDebug(ipcServer) << "Not queueing message of type:" << type;
+        return;
+    }
+    
+    // Limit queue size to prevent memory issues
+    static constexpr int MAX_QUEUED_MESSAGES = 50;
+    if (m_pendingMessages.size() >= MAX_QUEUED_MESSAGES) {
+        qCWarning(ipcServer) << "Message queue full, dropping oldest message";
+        m_pendingMessages.dequeue();
+    }
+    
+    m_pendingMessages.enqueue(message);
+    qCDebug(ipcServer) << "Queued message, queue size:" << m_pendingMessages.size();
+}
+
+void IPCServer::replayQueuedMessages()
+{
+    if (m_pendingMessages.isEmpty()) {
+        return;
+    }
+    
+    qCDebug(ipcServer) << "Replaying" << m_pendingMessages.size() << "queued messages";
+    
+    while (!m_pendingMessages.isEmpty()) {
+        QJsonObject message = m_pendingMessages.dequeue();
+        
+        // Send directly to avoid re-queueing
+        if (m_currentClient && m_currentClient->state() == QLocalSocket::ConnectedState) {
+            QJsonDocument doc(message);
+            QByteArray data = doc.toJson(QJsonDocument::Compact);
+            qCDebug(ipcServer) << "Replaying queued message:" << data;
+            m_currentClient->write(data + "\n");
+        }
+    }
+    
+    if (m_currentClient) {
+        m_currentClient->flush();
+    }
 }
 

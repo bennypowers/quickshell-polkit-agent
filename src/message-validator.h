@@ -25,6 +25,7 @@ public:
     static ValidationResult validateCheckAuthorization(const QJsonObject &message);
     static ValidationResult validateCancelAuthorization(const QJsonObject &message);
     static ValidationResult validateSubmitAuthentication(const QJsonObject &message);
+    static ValidationResult validateHeartbeat(const QJsonObject &message);
     
 private:
     // Helper validation functions
