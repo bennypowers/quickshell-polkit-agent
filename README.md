@@ -1,4 +1,5 @@
 # Quickshell Polkit Agent
+<img width="2048" height="1153" alt="2025-09-01-232327_hyprshot" src="https://github.com/user-attachments/assets/9a808b04-88e0-4b23-b218-831c51788b12" />
 
 > [!CAUTION]
 > **SECURITY-CRITICAL SOFTWARE**: This polkit agent handles system authentication.
