@@ -1,0 +1,16 @@
+# Example drop-in configuration for customizing logging
+# Copy this file to ~/.config/systemd/user/quickshell-polkit-agent.service.d/logging.conf
+# and customize as needed
+
+[Service]
+# Enable debug logging for all components
+Environment=QT_LOGGING_RULES="polkit.*=true;ipc.*=true"
+
+# Enable sensitive cookie logging (SECURITY RISK - debug only!)
+# Environment=QT_LOGGING_RULES="polkit.sensitive=true;polkit.*=true;ipc.*=true"
+
+# Force logging to stderr for journalctl
+Environment=QT_FORCE_STDERR_LOGGING=1
+
+# Custom socket path (if needed)
+# Environment=QUICKSHELL_POLKIT_SOCKET="/custom/path/to/socket"

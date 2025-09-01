@@ -1,5 +1,5 @@
 [Unit]
-Description=Quickshell Polkit Authentication Agent
+Description=Quickshell Polkit Authentication Agent (Debug Mode)
 Documentation=https://github.com/bennyp/quickshell-polkit-agent
 PartOf=graphical-session.target
 After=graphical-session.target
@@ -20,29 +20,21 @@ RestartSec=2sec
 StartLimitBurst=5
 StartLimitIntervalSec=60sec
 
-# Security hardening
+# Debug environment
+Environment=QT_LOGGING_RULES="polkit.*=true;ipc.*=true"
+Environment=QT_FORCE_STDERR_LOGGING=1
+
+# Automatic runtime directory cleanup
 RuntimeDirectory=quickshell-polkit
 RuntimeDirectoryMode=0700
-PrivateTmp=yes
-ProtectSystem=strict
-ProtectHome=yes
-NoNewPrivileges=yes
-MemoryDenyWriteExecute=yes
-RestrictRealtime=yes
-RestrictSUIDSGID=yes
-LockPersonality=yes
-ProtectHostname=yes
-ProtectClock=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectKernelLogs=yes
-ProtectControlGroups=yes
-RestrictNamespaces=yes
-SystemCallArchitectures=native
 
-# Resource limits
-MemoryMax=64M
-TasksMax=50
+# Minimal security (for debugging)
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+# Resource limits (more generous for debugging)
+MemoryMax=128M
+TasksMax=100
 
 [Install]
 WantedBy=graphical-session.target

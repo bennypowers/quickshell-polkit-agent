@@ -50,6 +50,7 @@ target_compile_definitions(quickshell-polkit-agent PRIVATE
 # Install binary to libexec (internal service location)
 install(TARGETS quickshell-polkit-agent DESTINATION libexec)
 
-# Install systemd user service unit
+# Install systemd user service units
 install(FILES packaging/systemd/quickshell-polkit-agent.service
+              packaging/systemd/quickshell-polkit-agent-debug.service
         DESTINATION lib/systemd/user)
