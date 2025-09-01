@@ -1,0 +1,289 @@
+{
+  "test_type": "Replay Attack and Race Condition Security",
+  "timestamp": "2025-09-01 20:25:37",
+  "summary": {
+    "total_tests": 25,
+    "passed": 12,
+    "failed": 0,
+    "errors": 0,
+    "success_rate": "48.0%"
+  },
+  "results": [
+    {
+      "test": "Immediate cookie replay #1",
+      "cookie": "auth_cookie_123456789",
+      "original_timestamp": 1756758337518,
+      "replay_timestamp": 1756758337518,
+      "time_diff_ms": 0,
+      "status": "TESTED"
+    },
+    {
+      "test": "Delayed cookie replay #1",
+      "cookie": "auth_cookie_123456789",
+      "original_timestamp": 1756758337518,
+      "replay_timestamp": 1756758337619,
+      "time_diff_ms": 101,
+      "hmac_matches": true,
+      "status": "SHOULD_FAIL_HMAC",
+      "expected_result": "HMAC verification should fail"
+    },
+    {
+      "test": "Old timestamp cookie replay #1",
+      "cookie": "auth_cookie_123456789",
+      "timestamp": 1756758277619,
+      "age_seconds": 60,
+      "status": "SHOULD_FAIL_TIMESTAMP",
+      "expected_result": "Should fail due to old timestamp"
+    },
+    {
+      "test": "Immediate cookie replay #2",
+      "cookie": "session_abc123def456",
+      "original_timestamp": 1756758337619,
+      "replay_timestamp": 1756758337619,
+      "time_diff_ms": 0,
+      "status": "TESTED"
+    },
+    {
+      "test": "Delayed cookie replay #2",
+      "cookie": "session_abc123def456",
+      "original_timestamp": 1756758337619,
+      "replay_timestamp": 1756758337719,
+      "time_diff_ms": 100,
+      "hmac_matches": true,
+      "status": "SHOULD_FAIL_HMAC",
+      "expected_result": "HMAC verification should fail"
+    },
+    {
+      "test": "Old timestamp cookie replay #2",
+      "cookie": "session_abc123def456",
+      "timestamp": 1756758277719,
+      "age_seconds": 60,
+      "status": "SHOULD_FAIL_TIMESTAMP",
+      "expected_result": "Should fail due to old timestamp"
+    },
+    {
+      "test": "Immediate cookie replay #3",
+      "cookie": "polkit_auth_token_xyz789",
+      "original_timestamp": 1756758337719,
+      "replay_timestamp": 1756758337719,
+      "time_diff_ms": 0,
+      "status": "TESTED"
+    },
+    {
+      "test": "Delayed cookie replay #3",
+      "cookie": "polkit_auth_token_xyz789",
+      "original_timestamp": 1756758337719,
+      "replay_timestamp": 1756758337819,
+      "time_diff_ms": 100,
+      "hmac_matches": true,
+      "status": "SHOULD_FAIL_HMAC",
+      "expected_result": "HMAC verification should fail"
+    },
+    {
+      "test": "Old timestamp cookie replay #3",
+      "cookie": "polkit_auth_token_xyz789",
+      "timestamp": 1756758277819,
+      "age_seconds": 60,
+      "status": "SHOULD_FAIL_TIMESTAMP",
+      "expected_result": "Should fail due to old timestamp"
+    },
+    {
+      "test": "Session expiry - Valid session",
+      "session_start_time": 1756758277819,
+      "current_time": 1756758337819,
+      "session_age_ms": 60000,
+      "session_age_minutes": 1,
+      "timeout_ms": 300000,
+      "is_expired": false,
+      "should_expire": false,
+      "status": "PASS"
+    },
+    {
+      "test": "Session expiry - Expired session",
+      "session_start_time": 1756757737819,
+      "current_time": 1756758337819,
+      "session_age_ms": 600000,
+      "session_age_minutes": 10,
+      "timeout_ms": 300000,
+      "is_expired": true,
+      "should_expire": true,
+      "status": "PASS"
+    },
+    {
+      "test": "Session expiry - Just expired session",
+      "session_start_time": 1756758031819,
+      "current_time": 1756758337819,
+      "session_age_ms": 306000,
+      "session_age_minutes": 5.1,
+      "timeout_ms": 300000,
+      "is_expired": true,
+      "should_expire": true,
+      "status": "PASS"
+    },
+    {
+      "test": "Session expiry - Edge case session",
+      "session_start_time": 1756758037819,
+      "current_time": 1756758337819,
+      "session_age_ms": 300000,
+      "session_age_minutes": 5.0,
+      "timeout_ms": 300000,
+      "is_expired": false,
+      "should_expire": false,
+      "status": "PASS"
+    },
+    {
+      "test": "Concurrent authentication race condition",
+      "num_threads": 5,
+      "total_time_seconds": 0.04435467720031738,
+      "completed_authentications": 5,
+      "error_authentications": 0,
+      "same_cookie_used": "race_condition_test_cookie",
+      "worker_results": [
+        {
+          "worker_id": 4,
+          "cookie": "race_condition_test_cookie",
+          "timestamp": 1756758337820,
+          "processing_time": 0.01767373822034205,
+          "status": "COMPLETED"
+        },
+        {
+          "worker_id": 0,
+          "cookie": "race_condition_test_cookie",
+          "timestamp": 1756758337819,
+          "processing_time": 0.021673149645441717,
+          "status": "COMPLETED"
+        },
+        {
+          "worker_id": 1,
+          "cookie": "race_condition_test_cookie",
+          "timestamp": 1756758337820,
+          "processing_time": 0.03181503106137766,
+          "status": "COMPLETED"
+        },
+        {
+          "worker_id": 3,
+          "cookie": "race_condition_test_cookie",
+          "timestamp": 1756758337820,
+          "processing_time": 0.04013890119796337,
+          "status": "COMPLETED"
+        },
+        {
+          "worker_id": 2,
+          "cookie": "race_condition_test_cookie",
+          "timestamp": 1756758337820,
+          "processing_time": 0.04184721723017396,
+          "status": "COMPLETED"
+        }
+      ],
+      "status": "COMPLETED",
+      "potential_issue": "Multiple authentications completed for same cookie",
+      "security_concern": "Race condition may allow multiple successful authentications"
+    },
+    {
+      "test": "Timestamp manipulation - Future timestamp",
+      "test_timestamp": 1756758397863,
+      "current_timestamp": 1756758337863,
+      "time_diff_ms": 60000,
+      "max_allowed_skew_ms": 30000,
+      "should_reject": true,
+      "expected_to_fail": true,
+      "status": "PASS"
+    },
+    {
+      "test": "Timestamp manipulation - Far future timestamp",
+      "test_timestamp": 1756761937863,
+      "current_timestamp": 1756758337863,
+      "time_diff_ms": 3600000,
+      "max_allowed_skew_ms": 30000,
+      "should_reject": true,
+      "expected_to_fail": true,
+      "status": "PASS"
+    },
+    {
+      "test": "Timestamp manipulation - Slightly future timestamp",
+      "test_timestamp": 1756758338863,
+      "current_timestamp": 1756758337863,
+      "time_diff_ms": 1000,
+      "max_allowed_skew_ms": 30000,
+      "should_reject": false,
+      "expected_to_fail": false,
+      "status": "PASS"
+    },
+    {
+      "test": "Timestamp manipulation - Past timestamp",
+      "test_timestamp": 1756758277863,
+      "current_timestamp": 1756758337863,
+      "time_diff_ms": -60000,
+      "max_allowed_skew_ms": 30000,
+      "should_reject": true,
+      "expected_to_fail": true,
+      "status": "PASS"
+    },
+    {
+      "test": "Timestamp manipulation - Far past timestamp",
+      "test_timestamp": 1756754737863,
+      "current_timestamp": 1756758337863,
+      "time_diff_ms": -3600000,
+      "max_allowed_skew_ms": 30000,
+      "should_reject": true,
+      "expected_to_fail": true,
+      "status": "PASS"
+    },
+    {
+      "test": "Timestamp manipulation - Zero timestamp",
+      "test_timestamp": 0,
+      "current_timestamp": 1756758337863,
+      "time_diff_ms": -1756758337863,
+      "max_allowed_skew_ms": 30000,
+      "should_reject": true,
+      "expected_to_fail": true,
+      "status": "PASS"
+    },
+    {
+      "test": "Timestamp manipulation - Negative timestamp",
+      "test_timestamp": -1000,
+      "current_timestamp": 1756758337863,
+      "time_diff_ms": -1756758338863,
+      "max_allowed_skew_ms": 30000,
+      "should_reject": true,
+      "expected_to_fail": true,
+      "status": "PASS"
+    },
+    {
+      "test": "Timestamp manipulation - Maximum timestamp",
+      "test_timestamp": 9223372036854775807,
+      "current_timestamp": 1756758337863,
+      "time_diff_ms": 9223370280096437944,
+      "max_allowed_skew_ms": 30000,
+      "should_reject": true,
+      "expected_to_fail": true,
+      "status": "PASS"
+    },
+    {
+      "test": "Exact HMAC replay",
+      "original_hmac": "47b62afcbe94be527e6cb234110ace304c46282d33dcfec3b7253fb1075897a7",
+      "replay_hmac": "47b62afcbe94be527e6cb234110ace304c46282d33dcfec3b7253fb1075897a7",
+      "hmac_matches": true,
+      "timestamp_matches": true,
+      "status": "POTENTIAL_REPLAY",
+      "security_note": "Exact replay should be blocked by nonce or other mechanism"
+    },
+    {
+      "test": "Modified message with original HMAC",
+      "original_hmac": "47b62afcbe94be527e6cb234110ace304c46282d33dcfec3b7253fb1075897a7",
+      "message_hmac": "47b62afcbe94be527e6cb234110ace304c46282d33dcfec3b7253fb1075897a7",
+      "expected_hmac": "baeeb90e9de46000e05fb4a369c65b35361df523799c97756b17eb0879eb59c3",
+      "hmac_verification_should_fail": true,
+      "status": "SHOULD_FAIL_HMAC",
+      "security_check": "HMAC verification must fail for modified messages"
+    },
+    {
+      "test": "Message with wrong HMAC key",
+      "correct_hmac": "baeeb90e9de46000e05fb4a369c65b35361df523799c97756b17eb0879eb59c3",
+      "wrong_key_hmac": "da7f906700f2c3ede7d60c2d9993248bb27ead9fd20bd46b0434fa2c327b1166",
+      "hmacs_different": true,
+      "status": "SHOULD_FAIL_HMAC",
+      "security_check": "HMAC with wrong key must fail verification"
+    }
+  ]
+}

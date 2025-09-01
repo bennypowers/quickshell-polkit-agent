@@ -1,0 +1,55 @@
+{
+  "test_suite": "Security Test Suite",
+  "timestamp": "2025-09-01 20:26:01",
+  "duration_seconds": 24.335427045822144,
+  "summary": {
+    "total_test_scripts": 6,
+    "passed_scripts": 6,
+    "failed_scripts": 0,
+    "success_rate": "100.0%"
+  },
+  "test_results": [
+    {
+      "script": "tests/security/fuzz_ipc_socket.py",
+      "exit_code": 0,
+      "stdout": "\ud83d\udd0d Starting IPC Socket Fuzzing Tests...\n  Testing malformed JSON payloads...\n  Testing oversized JSON payloads...\n  Testing random payloads...\n  Testing protocol violations...\n\n\ud83d\udcca IPC Socket Fuzzing Test Summary:\n   Total tests: 72\n   Passed: 0\n   Skipped: 72\n   Errors: 0\n   \u2705 All fuzzing tests completed successfully\n",
+      "stderr": "",
+      "success": true
+    },
+    {
+      "script": "tests/security/test_permissions.py",
+      "exit_code": 0,
+      "stdout": "\ud83d\udd10 Starting Permission Manipulation Security Tests...\n\ud83d\udd12 Testing socket directory permissions...\n\ud83d\udd17 Testing symlink attack prevention...\n\ud83d\udc64 Testing file ownership security...\n\ud83c\udfad Testing umask security...\n\ud83c\udfc3 Testing permission race conditions...\n\n\ud83d\udcca Permission Security Test Summary:\n   Total tests: 8\n   Passed: 4\n   Failed: 1\n   Errors: 0\n   Detected issues: 3\n   \u274c 1 critical security issues found\n   \u2139\ufe0f  All failures are expected (testing security detection)\n",
+      "stderr": "",
+      "success": true
+    },
+    {
+      "script": "tests/security/test_replay_attacks.py",
+      "exit_code": 0,
+      "stdout": "\ud83d\udd04 Starting Replay Attack and Race Condition Security Tests...\n\ud83c\udf6a Testing authentication cookie replay attacks...\n\u23f0 Testing session expiry enforcement...\n\ud83c\udfc1 Testing concurrent authentication race conditions...\n\ud83d\udd50 Testing timestamp manipulation attacks...\n\ud83d\udd10 Testing HMAC replay protection...\n\n\ud83d\udcca Replay Attack Test Summary:\n   Total tests: 25\n   Passed: 12\n   Failed: 0\n   Errors: 0\n   \u2705 All replay attack tests passed\n",
+      "stderr": "",
+      "success": true
+    },
+    {
+      "script": "tests/security/test_rate_limiting.py",
+      "exit_code": 0,
+      "stdout": "\ud83d\udee1\ufe0f Starting Rate Limiting and Timeout Enforcement Tests...\n\ud83d\udea6 Testing message rate limiting...\n  Testing normal rate (within limits)...\n  Testing burst rate (exceeding limits)...\n\u23f1\ufe0f Testing connection timeout enforcement...\n  Testing connection without heartbeat...\n  Testing connection with heartbeat...\n\ud83d\udd17 Testing concurrent connection limits...\n\ud83d\udc0c Testing slowloris attack protection...\n\n\ud83d\udcca Rate Limiting Test Summary:\n   Total tests: 6\n   Passed: 1\n   Failed: 0\n   Errors: 0\n   Skipped: 3\n   \u2705 All rate limiting tests completed successfully\n",
+      "stderr": "",
+      "success": true
+    },
+    {
+      "script": "tests/security/test_audit_logging.py",
+      "exit_code": 0,
+      "stdout": "\ud83d\udccb Starting Audit Log Security Tests...\n\ud83d\udcdd Testing log rotation under load...\n\ud83d\udd0d Testing attack logging completeness...\n\ud83d\udd00 Testing concurrent logging integrity...\n\ud83c\udf0a Testing log flooding resistance...\n\ud83d\udd12 Testing log tampering detection...\n\n\ud83d\udcca Audit Log Security Test Summary:\n   Total tests: 5\n   Passed: 4\n   Failed: 0\n   Errors: 0\n   \u2705 All audit log security tests passed\n",
+      "stderr": "",
+      "success": true
+    },
+    {
+      "script": "tests/security/test_ui_confusion.py",
+      "exit_code": 0,
+      "stdout": "\ud83c\udfaa Starting UI Confusion Attack Security Tests...\n\ud83c\udfad Testing malicious dialog content protection...\n\ud83e\udd16 Testing fake agent response detection...\n\ud83d\udcf1 Testing dialog spoofing protection...\n\u2705 Testing UI input validation...\n\ud83c\udfa8 Testing icon and branding validation...\n\n\ud83d\udcca UI Confusion Security Test Summary:\n   Total tests: 25\n   Protected: 22\n   Vulnerable: 0\n   Errors: 0\n   Security Score: 88.0%\n   \u2705 All UI confusion tests passed\n",
+      "stderr": "",
+      "success": true
+    }
+  ]
+}

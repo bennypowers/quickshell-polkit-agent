@@ -1,0 +1,445 @@
+{
+  "test_type": "IPC Socket Fuzzing",
+  "timestamp": "2025-09-01 20:25:37",
+  "summary": {
+    "total_tests": 72,
+    "passed": 0,
+    "skipped": 72,
+    "errors": 0,
+    "success_rate": "0.0%"
+  },
+  "results": [
+    {
+      "description": "Malformed JSON #1",
+      "payload_preview": "{\"type\": \"check_authorization\"",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #2",
+      "payload_preview": "{\"type\": \"check_authorization\", \"action_id\":}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #3",
+      "payload_preview": "{\"type\": \"check_authorization\" \"action_id\": \"test\"}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #4",
+      "payload_preview": "{type: \"check_authorization\"}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #5",
+      "payload_preview": "{\"type\": \"check_authorization\", \"extra_comma\": ,}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #6",
+      "payload_preview": "{\"type\": null}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #7",
+      "payload_preview": "{\"type\": 123}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #8",
+      "payload_preview": "{\"type\": []}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #9",
+      "payload_preview": "{\"type\": {}}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #10",
+      "payload_preview": "{\"type\": \"check\\u0000authorization\"}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #11",
+      "payload_preview": "{\"type\": \"check\nauthorization\"}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #12",
+      "payload_preview": "{\"type\": \"check\tauthorization\"}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #13",
+      "payload_preview": "b'\\x00\\x01\\x02\\x03'",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Malformed JSON #14",
+      "payload_preview": "{\"type\": \"\\xff\\xfe\"}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Oversized JSON #1",
+      "payload_preview": "{\"type\": \"check_authorization\", \"action_id\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Oversized JSON #2",
+      "payload_preview": "{\"type\": \"check_authorization\", \"field_0\": \"value_0\", \"field_1\": \"value_1\", \"field_2\": \"value_2\", \"f...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Oversized JSON #3",
+      "payload_preview": "{\"type\": \"check_authorization\", \"nested\": {\"nested\": {\"nested\": {\"nested\": {\"nested\": {\"nested\": {\"n...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #1",
+      "payload_preview": "{\"type\": \"mZHFwTrLWz\", \"AARgIWLj\": \"f(?v#iwC@\\r,oq-:^B)7Jj\\nTdvn\\\\?@AVmn\\t ''p\\tJcb(> 5\\r[A:$ddd~wdr...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #2",
+      "payload_preview": "{\"type\": \"LuzkmtLkbHJRVFCQJcYAIUFxrOrx\", \"Bsle\": [], \"gNAd\": false, \"AnQjbAOJ\": 38106214.74790001, \"...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #3",
+      "payload_preview": "{\"type\": \"pWrdpiJoWsMNUhSRaSI_MOXjvjaBRe\", \"naapKwatFr\": null}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #4",
+      "payload_preview": "{\"type\": \"RmWVbaSSyksJixIojRtrwNuJErdy\", \"M_QJkhz\": true, \"Z_C_VlZpOsnsp\": null, \"QWacbSxLTtmTN\": fa...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #5",
+      "payload_preview": "{\"type\": \"WOlOvEPrmUGffWt_tTeLEwYOqmRV\", \"ZFmyqZ\": 962616022, \"xM_uP_tvsNsRdqMDZBF\": 2310401169.4500...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #6",
+      "payload_preview": "{\"type\": \"brOrXYTspmzxLfSvksCMKqeAZLrjOwmBVsVzIMAoJZqxvyvV\", \"XFxPcCFSzXPLMgTl\": null, \"ApnmfmFzBkXE...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #7",
+      "payload_preview": "{\"type\": \"rOSnpLnDqhNkeYwcHFych\", \"gz\": false, \"nKiTQwVNEuyn\": \"s`Lx21V~rEh~\\fxlE=:-`ch<[{4\\\"wSzulZd...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #8",
+      "payload_preview": "{\"type\": \"zvvUVjrNiwhscJSofNSkqeeSTtrdCjEQ\", \"KmGJTBeoTWcOtxTZ\": \"()B>{mugaI}^Q|E[Q&(?{!c<;DCk24}\\f?...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #9",
+      "payload_preview": "{\"type\": \"zEDSlfyvqyPU\", \"gYwOuBXyue\": 3494777486.5613136, \"Be\": 3778642692.730238, \"jwFtiXzcbNI_jPU...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #10",
+      "payload_preview": "{\"type\": \"zUblbfjWKWg_FZMLVNvVrvmcsiOoieTZv\", \"aTmVbJySzYSdYZ\": 1757260915, \"NgEgv\": {}, \"e_yCWjbTjE...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #11",
+      "payload_preview": "{\"type\": \"cqoggnPWbcgnqIw\", \"ndkUGbepAt_wd\": {\"key_0\": \"value_0\", \"key_1\": \"value_1\", \"key_2\": \"valu...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #12",
+      "payload_preview": "{\"type\": \"cRaPjcuqISBb\", \"seKtXO\": -337723721.42066765, \"JWqkTeYb\": {\"key_0\": \"value_0\", \"key_1\": \"v...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #13",
+      "payload_preview": "{\"type\": \"SFtkR\", \"dZhf\": false, \"YdahNTceQDsoRpehi\": -2677339263.5196514, \"VFLHyFuMAgvbRn\": [36, 90...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #14",
+      "payload_preview": "{\"type\": \"XAaGLBZCNgVE\", \"ZFsAU\": false, \"aoJs\": \"L|hV^~JG`*\\\\|OG=Yx$).^jU{\\\"Lk@6;-on|X:'|\\u000bVS71...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #15",
+      "payload_preview": "{\"type\": \"Ru_TuiUc_otvugJeoyeFw\"}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #16",
+      "payload_preview": "{\"type\": \"YTpqbaP\", \"kQWrKIgBbluS\": -2012541262, \"T_qGT\": -569269614, \"RkMJ\": -90899966}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #17",
+      "payload_preview": "{\"type\": \"ARzmDnzHk_wtacDAtt_NmYiaTwdBIqirxnSNYuSuXlhqclp\", \"ujGsfDYjsS\": {\"key_0\": \"value_0\", \"key_...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #18",
+      "payload_preview": "{\"type\": \"NwFZWGM\", \"DDHhzsUezynbsOTOMHB\": [], \"AcEkrFHwPUAH\": {}, \"quCstDWSDOV_DjY\": \"Ep\\t2}.N\\\"zbR...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #19",
+      "payload_preview": "{\"type\": \"I\", \"FrfbiOvFFJWwGCO_Djb\": -1063768967.6736565, \"LEx_bpcseQlqyLcaIFii\": \"8lk\\u000boT)g\\t%\\...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #20",
+      "payload_preview": "{\"type\": \"kFYuAkLrqijJS_AtgESQgP\", \"snvdWvsOmjfto\": true, \"OFwvueComlGP\": -1186122214, \"IZJHFKrCVwDg...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #21",
+      "payload_preview": "{\"type\": \"gvRMffnOGhfzVfMlOqOPHgh\", \"werqKUImVzxBLfUpuhT\": null, \"RLYb\": 1930896850, \"BizBxHkS\": 214...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #22",
+      "payload_preview": "{\"type\": \"hJzlnUlTgVTDrcdbJYOBRK_Bp\", \"IPC\": {\"key_0\": \"value_0\", \"key_1\": \"value_1\", \"key_2\": \"valu...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #23",
+      "payload_preview": "{\"type\": \"UqZwITsflsQhmZnYjGrik\", \"VLdJpQgyVxgoDMt\": \"1w:\\\\@RSdVe:S\\rg9CH0D1muIbD$'I>\\u000bqqK3wzQ$\\...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #24",
+      "payload_preview": "{\"type\": \"CjrWZkLcaS_KLiNqLOOdNriTLkfYBuVvk_BW\", \"WTV_C\": -9721781727.498463, \"AVnSuDtxr\": {\"key_0\":...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #25",
+      "payload_preview": "{\"type\": \"namKqnbJYICGqGubZMeruUNY\", \"tpHAiwfJLrvQc\": [41, 23, 81, 0, 61, 99, 66, 65], \"oJJ\": 851443...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #26",
+      "payload_preview": "{\"type\": \"msQHAzPrXEngskzzcmUKyqHgBUQjrMGbV\", \"_ATRPBEkJqESKI\": -1700562397, \"DGW\": 5812802414.36332...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #27",
+      "payload_preview": "{\"type\": \"ZELeKCYQwmANVmVyiRodbd_fQkzWnRKCnRaNvgVkjvM\", \"MHjEHb\": -6695806649.7364645, \"nuieegcz\": {...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #28",
+      "payload_preview": "{\"type\": \"fAjKilYVSeGH_KNbHfIXhMwOjYOdOV_elmuxfQtG\", \"VvNaiPq\": -115108862.18997192, \"oJurjX_ZsJuTBN...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #29",
+      "payload_preview": "{\"type\": \"yaD\", \"cUa\": true, \"_xjzmZ\": {\"key_0\": \"value_0\", \"key_1\": \"value_1\", \"key_2\": \"value_2\", ...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #30",
+      "payload_preview": "{\"type\": \"JMYZdtYOKEXZUyp\", \"b\": {}, \"vfUqLxDMnhUHb\": -450211016, \"uWl\": [14, 90, 23, 25, 75, 13], \"...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #31",
+      "payload_preview": "{\"type\": \"PWtW_DgHCveSUcrTfC\"}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #32",
+      "payload_preview": "{\"type\": \"NURqmmhKgatUaouVfHqgkocFmmckOImgnbrBzBOO__eJluDP\", \"vv\": true, \"r\": \"Bl]$-t$Qp@\\u000b?m]tH...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #33",
+      "payload_preview": "{\"type\": \"VpjFaYVKKgYLqdhlwVPUCFNZpIIakOLYtG\", \"QFZmSFT\": [33, 52, 51], \"GUVWAbeCVkblxc\": \"OmBD|'du8...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #34",
+      "payload_preview": "{\"type\": \"fsbouzIMTRLDId\", \"fzQDtfQdCFpGiXPAAH\": {}, \"_LIpEgxKXVQ\": \"\", \"XtHWbUzkI\": {\"key_0\": \"valu...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #35",
+      "payload_preview": "{\"type\": \"phezTshGaFigRdiQXFlciyXwcYVjbBWEQex\", \"Bj_FmVCcfnS\": null, \"YnMCaxPSkHzfPwtJkXs\": 96641333...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #36",
+      "payload_preview": "{\"type\": \"NREDXCDJLoFGnRiIlvonIKwQFnVZyeuhLrNndyekEj\", \"hCUEvD\": -5591526}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #37",
+      "payload_preview": "{\"type\": \"sIf_HwLhWmNffpwRYzxIgoGZQdyryeSDJ\", \"BSlYBvE\": {}, \"JpDJkYM\": -154599426, \"ytDYFYOOeAHkkfD...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #38",
+      "payload_preview": "{\"type\": \"gEuAkQCXVlwuGdbfHwbanNzolGFxyEkb\", \"YGnfRKI\": {\"key_0\": \"value_0\"}, \"HHADdmkmLTHSJfa\": 739...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #39",
+      "payload_preview": "{\"type\": \"NtuEOsrabYWZNtfSIDsdlfCkqgwfhhVdG\", \"QtuDbhNZqYGKaMEwdXxR\": {\"key_0\": \"value_0\", \"key_1\": ...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #40",
+      "payload_preview": "{\"type\": \"ynWmmlBqJ\", \"HxRQJdQcTzKvzX\": true, \"hMgYePanaJdcdkCZRz\": {}}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #41",
+      "payload_preview": "{\"type\": \"UrpPRxfgknaGRABJIOuyMomZsO_RAlBdI\", \"_Gtm\": true, \"XfAeBXXANIUFq\": null, \"ZqfuWatoMuMAbrHH...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #42",
+      "payload_preview": "{\"type\": \"_f_wlteFFYMFWTBoGovFXMPSYKkmMrljBtBsVeWHcXEFVmt\", \"S\": 6043874590.020407, \"hvasToJOfTcNtyu...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #43",
+      "payload_preview": "{\"type\": \"EoQRlCKkyS_GIURXakfELUuGPwUJJX_ZoxbouDtFaYUAxb\", \"_\": {}, \"FQyEvFqxND\": -8448666510.571636...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #44",
+      "payload_preview": "{\"type\": \"QSRpzDHYJSZETaXDzkFIhUlGhDTQnCMbFs\", \"XQbImntblIoS\": 7052814255.067947, \"FUICkBIKRZEaSzYEG...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #45",
+      "payload_preview": "{\"type\": \"BCAPniEgQvtldKSnBg\", \"IoZHW_pWHPCAAmehIoqj\": null, \"DbCMV\": 9198607176.681545, \"FOmrQKFhQo...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #46",
+      "payload_preview": "{\"type\": \"JhrQcrWNSVZkrycUjOgxUKgdSsPpBCPJOPmlFtjqTVbdRUBI\", \"OjbznzJRTispNBwfPm\": null, \"fhggHQIWJn...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #47",
+      "payload_preview": "{\"type\": \"pG\", \"csIOIQUnaw\": null, \"RnVzVwzXxMehCBUZN\": [84, 34, 24, 71, 53]}",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #48",
+      "payload_preview": "{\"type\": \"NNYDfviHQFcfTWVBBBL\", \"rzMVCNkjjwLathbsX\": -734808787, \"eTZchAvgwMPlXRvq\": [94, 70, 48, 91...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #49",
+      "payload_preview": "{\"type\": \"GyBvtaWlZRVGAkdHPUIfOCvvN_FtpMKjRaXaj\", \"zEelyK\": null, \"KZB\": [63, 24, 27, 43, 51, 25, 10...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Random payload #50",
+      "payload_preview": "{\"type\": \"exU\", \"RBF\": [23, 71, 86, 48], \"foZ\": \"n--8*$zdE5<&`y73u(>-^,U&YIJ4;=L\\r~Nf\\fS<y,x)_\\t^AP*...",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Protocol violation #1",
+      "payload_preview": "",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Protocol violation #2",
+      "payload_preview": "\n",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Protocol violation #3",
+      "payload_preview": "not json at all",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Protocol violation #4",
+      "payload_preview": "HTTP/1.1 200 OK\r\n\r\n",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    },
+    {
+      "description": "Protocol violation #5",
+      "payload_preview": "\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+      "status": "SKIPPED - Socket not found",
+      "error": "Socket file does not exist"
+    }
+  ]
+}

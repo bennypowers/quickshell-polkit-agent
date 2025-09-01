@@ -48,9 +48,60 @@ add_executable(test-localsocket-validation
 target_link_libraries(test-localsocket-validation Qt6::Test Qt6::Core Qt6::Network)
 add_test(NAME LocalSocketValidation COMMAND test-localsocket-validation)
 
+# Add Python security tests
+find_program(PYTHON3_EXECUTABLE python3)
+if(PYTHON3_EXECUTABLE)
+    # Add security test runner
+    add_test(NAME SecurityTests 
+        COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/security/run_security_tests.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    
+    # Add individual security tests
+    add_test(NAME FuzzIPCSocket
+        COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/security/fuzz_ipc_socket.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    
+    add_test(NAME PermissionSecurity
+        COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/security/test_permissions.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    
+    add_test(NAME ReplayAttacks
+        COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/security/test_replay_attacks.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    
+    add_test(NAME RateLimiting
+        COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/security/test_rate_limiting.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    
+    add_test(NAME AuditLogging
+        COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/security/test_audit_logging.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    
+    add_test(NAME UIConfusion
+        COMMAND ${PYTHON3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/security/test_ui_confusion.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    
+    message(STATUS "Python3 found: Security tests enabled")
+else()
+    message(WARNING "Python3 not found: Security tests disabled")
+endif()
+
 # Add custom target to run all tests
 add_custom_target(run-tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
     DEPENDS test-message-validator test-security test-simple-integration test-localsocket-validation
     COMMENT "Running all tests"
+)
+
+# Add custom target to run only security tests
+add_custom_target(run-security-tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --tests-regex "Security|Fuzz|Permission|Replay|RateLimit|Audit|UIConfusion"
+    COMMENT "Running security tests only"
 )
