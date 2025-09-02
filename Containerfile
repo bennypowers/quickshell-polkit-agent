@@ -1,23 +1,21 @@
-# Use Ubuntu 24.04 which has libpolkit-qt6-1-dev available
-FROM ubuntu:24.04
+# Use Fedora which has excellent Qt6/polkit support
+FROM fedora:42
 
 # Install all dependencies including polkit Qt6
-RUN apt-get update && apt-get install -y \
-    qt6-base-dev \
-    qt6-tools-dev \
-    libqt6core6 \
-    libqt6network6 \
-    qt6-declarative-dev \
-    pkg-config \
+RUN dnf update -y && dnf install -y \
+    qt6-qtbase-devel \
+    qt6-qttools-devel \
+    qt6-qtdeclarative-devel \
+    polkit-qt6-1-devel \
+    pkgconfig \
     python3 \
     python3-pip \
-    python3-venv \
     cmake \
-    build-essential \
-    libpolkit-qt6-1-dev \
+    gcc-c++ \
+    make \
     cppcheck \
-    clang-tidy \
-    && rm -rf /var/lib/apt/lists/*
+    clang-tools-extra \
+    && dnf clean all
 
 # Set up Python virtual environment
 RUN python3 -m venv /opt/security-test-env && \
