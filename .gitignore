@@ -29,3 +29,7 @@ Testing/
 
 # Gentoo packaging - belongs in overlay, not main repo
 packaging/gentoo/
+
+# Ignore security test reports and build results
+tests/security/reports/
+build-security/test-results/

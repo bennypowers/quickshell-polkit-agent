@@ -1,0 +1,335 @@
+{
+  "test_type": "Rate Limiting and Timeout Enforcement",
+  "timestamp": "2025-09-01 20:27:17",
+  "summary": {
+    "total_tests": 6,
+    "passed": 1,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 3,
+    "success_rate": "33.3%"
+  },
+  "results": [
+    {
+      "test": "Normal message rate (within limits)",
+      "rate_per_second": 5,
+      "limit_per_second": 10,
+      "results": [
+        {
+          "message_num": 1,
+          "success": null,
+          "response_time": 8.845329284667969e-05
+        },
+        {
+          "message_num": 2,
+          "success": null,
+          "response_time": 0.00014066696166992188
+        },
+        {
+          "message_num": 3,
+          "success": null,
+          "response_time": 0.00013184547424316406
+        },
+        {
+          "message_num": 4,
+          "success": null,
+          "response_time": 0.00012731552124023438
+        },
+        {
+          "message_num": 5,
+          "success": null,
+          "response_time": 0.00016570091247558594
+        }
+      ],
+      "total_sent": 5,
+      "successful": 0,
+      "status": "PASS"
+    },
+    {
+      "test": "Burst message rate (exceeding limits)",
+      "messages_sent": 20,
+      "burst_duration_seconds": 0.0005452632904052734,
+      "effective_rate_per_second": 36679.52776563183,
+      "limit_per_second": 10,
+      "successful_messages": 0,
+      "failed_messages": 20,
+      "results": [
+        {
+          "message_num": 1,
+          "success": null,
+          "response_time": 0.00010633468627929688,
+          "time_from_burst_start": 0.00010895729064941406
+        },
+        {
+          "message_num": 2,
+          "success": null,
+          "response_time": 3.266334533691406e-05,
+          "time_from_burst_start": 0.00014495849609375
+        },
+        {
+          "message_num": 3,
+          "success": null,
+          "response_time": 2.574920654296875e-05,
+          "time_from_burst_start": 0.000171661376953125
+        },
+        {
+          "message_num": 4,
+          "success": null,
+          "response_time": 2.1696090698242188e-05,
+          "time_from_burst_start": 0.00019407272338867188
+        },
+        {
+          "message_num": 5,
+          "success": null,
+          "response_time": 2.1696090698242188e-05,
+          "time_from_burst_start": 0.0002162456512451172
+        },
+        {
+          "message_num": 6,
+          "success": null,
+          "response_time": 2.09808349609375e-05,
+          "time_from_burst_start": 0.00023794174194335938
+        },
+        {
+          "message_num": 7,
+          "success": null,
+          "response_time": 3.170967102050781e-05,
+          "time_from_burst_start": 0.0002703666687011719
+        },
+        {
+          "message_num": 8,
+          "success": null,
+          "response_time": 2.1696090698242188e-05,
+          "time_from_burst_start": 0.0002925395965576172
+        },
+        {
+          "message_num": 9,
+          "success": null,
+          "response_time": 2.0503997802734375e-05,
+          "time_from_burst_start": 0.0003135204315185547
+        },
+        {
+          "message_num": 10,
+          "success": null,
+          "response_time": 2.0503997802734375e-05,
+          "time_from_burst_start": 0.0003345012664794922
+        },
+        {
+          "message_num": 11,
+          "success": null,
+          "response_time": 2.0742416381835938e-05,
+          "time_from_burst_start": 0.0003554821014404297
+        },
+        {
+          "message_num": 12,
+          "success": null,
+          "response_time": 2.002716064453125e-05,
+          "time_from_burst_start": 0.0003757476806640625
+        },
+        {
+          "message_num": 13,
+          "success": null,
+          "response_time": 2.0503997802734375e-05,
+          "time_from_burst_start": 0.000396728515625
+        },
+        {
+          "message_num": 14,
+          "success": null,
+          "response_time": 1.9550323486328125e-05,
+          "time_from_burst_start": 0.00041675567626953125
+        },
+        {
+          "message_num": 15,
+          "success": null,
+          "response_time": 2.0265579223632812e-05,
+          "time_from_burst_start": 0.00043773651123046875
+        },
+        {
+          "message_num": 16,
+          "success": null,
+          "response_time": 2.0265579223632812e-05,
+          "time_from_burst_start": 0.00045871734619140625
+        },
+        {
+          "message_num": 17,
+          "success": null,
+          "response_time": 2.002716064453125e-05,
+          "time_from_burst_start": 0.0004792213439941406
+        },
+        {
+          "message_num": 18,
+          "success": null,
+          "response_time": 1.9788742065429688e-05,
+          "time_from_burst_start": 0.000499725341796875
+        },
+        {
+          "message_num": 19,
+          "success": null,
+          "response_time": 2.3603439331054688e-05,
+          "time_from_burst_start": 0.0005238056182861328
+        },
+        {
+          "message_num": 20,
+          "success": null,
+          "response_time": 2.0742416381835938e-05,
+          "time_from_burst_start": 0.0005447864532470703
+        }
+      ],
+      "status": "TESTED",
+      "rate_limiting_active": true,
+      "security_status": "PROTECTED"
+    },
+    {
+      "test": "Connection timeout without heartbeat",
+      "expected_timeout_seconds": 60.0,
+      "start_time": 1756758437.6654503,
+      "socket_not_found": true,
+      "status": "SKIPPED",
+      "total_time_seconds": 1.4543533325195312e-05
+    },
+    {
+      "test": "Connection with proper heartbeat",
+      "heartbeat_interval_seconds": 30.0,
+      "test_duration_seconds": 35,
+      "socket_not_found": true,
+      "status": "SKIPPED"
+    },
+    {
+      "test": "Concurrent connection limits",
+      "attempted_connections": 20,
+      "successful_connections": 0,
+      "refused_connections": 0,
+      "error_connections": 0,
+      "connection_details": [
+        {
+          "connection_id": 8,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 12,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 18,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 13,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 7,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 6,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 10,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 0,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 4,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 3,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 2,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 15,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 1,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 9,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 5,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 11,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 14,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 17,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 16,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        },
+        {
+          "connection_id": 19,
+          "success": false,
+          "error": "Socket not found",
+          "status": "SKIPPED"
+        }
+      ],
+      "status": "TESTED",
+      "dos_protection": "UNKNOWN"
+    },
+    {
+      "test": "Slowloris attack protection",
+      "attack_description": "Send data very slowly to hold connection open",
+      "socket_not_found": true,
+      "status": "SKIPPED"
+    }
+  ]
+}
