@@ -159,8 +159,10 @@ jobs:
       run: |
         docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
           set -e
+          QT_FLAGS=\$(pkg-config --cflags Qt6Core Qt6Network Qt6Qml)
+          POLKIT_FLAGS=\$(pkg-config --cflags polkit-qt6-core-1)
           for file in \$(find src/ -name '*.cpp'); do
-            clang-tidy \"\$file\" -- -I src/
+            clang-tidy \"\$file\" -- -I src/ \$QT_FLAGS \$POLKIT_FLAGS
           done
         "
 
