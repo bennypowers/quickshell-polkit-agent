@@ -22,74 +22,67 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Build container
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          qt6-base-dev \
-          qt6-tools-dev \
-          libqt6core6 \
-          libqt6network6 \
-          qt6-declarative-dev \
-          pkg-config \
-          python3 \
-          python3-pip \
-          python3-venv \
-          cmake \
-          build-essential \
-          libpolkit-qt6-1-dev
+        docker build -t quickshell-polkit-test -f Containerfile .
 
-    - name: Set up Python environment
+    - name: Build application
       run: |
-        python3 -m venv security-test-env
-        source security-test-env/bin/activate
-        pip install --upgrade pip
-        # Note: Security tests use only Python standard library
-
-    - name: Build application (without polkit for CI)
-      run: |
-        mkdir -p build-security
-        cd build-security
-        # For CI, we skip polkit dependencies and some tests may not build/run.
-        # This is expected in CI and does not affect security fuzzing tests.
-        cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug -DSKIP_POLKIT=ON
+        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
+          mkdir -p build-security &&
+          cd build-security &&
+          cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+        "
 
     - name: Run existing unit tests
       run: |
-        cd build-security
-        # Some tests may be skipped due to lack of polkit in CI.
-        make test-message-validator test-security test-simple-integration
-        ctest --output-on-failure --tests-regex "(MessageValidator|SecurityManager|SimpleIntegration)"
+        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
+          cd build-security &&
+          make test-message-validator test-security test-simple-integration &&
+          ctest --output-on-failure --tests-regex '(MessageValidator|SecurityManager|SimpleIntegration)'
+        "
 
     - name: Run security fuzzing tests
+      id: fuzzing
       run: |
-        source security-test-env/bin/activate
-        python3 tests/security/fuzz_ipc_socket.py
+        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
+          python3 tests/security/fuzz_ipc_socket.py
+        "
 
     - name: Run permission manipulation tests
+      id: permissions
       run: |
-        source security-test-env/bin/activate
-        python3 tests/security/test_permissions.py
+        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
+          python3 tests/security/test_permissions.py
+        "
 
     - name: Run replay/race condition tests
+      id: replay
       run: |
-        source security-test-env/bin/activate
-        python3 tests/security/test_replay_attacks.py
+        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
+          python3 tests/security/test_replay_attacks.py
+        "
 
     - name: Run rate limiting tests
+      id: ratelimit
       run: |
-        source security-test-env/bin/activate
-        python3 tests/security/test_rate_limiting.py
+        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
+          python3 tests/security/test_rate_limiting.py
+        "
 
     - name: Run audit log tests
+      id: auditlog
       run: |
-        source security-test-env/bin/activate
-        python3 tests/security/test_audit_logging.py
+        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
+          python3 tests/security/test_audit_logging.py
+        "
 
     - name: Run UI confusion tests
+      id: ui
       run: |
-        source security-test-env/bin/activate
-        python3 tests/security/test_ui_confusion.py
+        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
+          python3 tests/security/test_ui_confusion.py
+        "
 
     - name: Upload security test results
       uses: actions/upload-artifact@v4
@@ -149,26 +142,27 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install security linting tools
+    - name: Build container
       run: |
-        sudo apt-get update
-        sudo apt-get install -y cppcheck clang-tidy
+        docker build -t quickshell-polkit-test -f Containerfile .
 
     - name: Run cppcheck for security issues
       run: |
-        # Run cppcheck, fail if any error or warning is found
-        cppcheck --enable=all --inconclusive --xml --xml-version=2 \
-          --suppress=missingIncludeSystem \
-          --suppress=unmatchedSuppression \
-          src/ 2> cppcheck-results.xml
+        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
+          cppcheck --enable=all --inconclusive --xml --xml-version=2 \
+            --suppress=missingIncludeSystem \
+            --suppress=unmatchedSuppression \
+            src/ 2> cppcheck-results.xml
+        "
 
     - name: Run clang-tidy for security patterns
       run: |
-        # Run clang-tidy on all C++ files and fail job if any error is found
-        set -e
-        for file in $(find src/ -name "*.cpp"); do
-          clang-tidy "$file" -- -I src/
-        done
+        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
+          set -e
+          for file in \$(find src/ -name '*.cpp'); do
+            clang-tidy \"\$file\" -- -I src/
+          done
+        "
 
     - name: Upload static analysis results
       uses: actions/upload-artifact@v4
