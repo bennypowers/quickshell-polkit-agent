@@ -17,11 +17,11 @@ jobs:
   security-tests:
     name: Security Tests
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -37,58 +37,59 @@ jobs:
           python3-venv \
           cmake \
           build-essential
-          
+
     - name: Set up Python environment
       run: |
         python3 -m venv security-test-env
         source security-test-env/bin/activate
         pip install --upgrade pip
         # Note: Security tests use only Python standard library
-        
+
     - name: Build application (without polkit for CI)
       run: |
         mkdir -p build-security
         cd build-security
-        # Configure without polkit dependencies for CI testing
-        cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug -DSKIP_POLKIT=ON || true
-        
+        # For CI, we skip polkit dependencies and some tests may not build/run.
+        # This is expected in CI and does not affect security fuzzing tests.
+        cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug -DSKIP_POLKIT=ON
+
     - name: Run existing unit tests
       run: |
         cd build-security
-        # Run tests that don't require polkit
-        make test-message-validator test-security test-simple-integration || true
-        ctest --output-on-failure --tests-regex "(MessageValidator|SecurityManager|SimpleIntegration)" || true
-        
+        # Some tests may be skipped due to lack of polkit in CI.
+        make test-message-validator test-security test-simple-integration
+        ctest --output-on-failure --tests-regex "(MessageValidator|SecurityManager|SimpleIntegration)"
+
     - name: Run security fuzzing tests
       run: |
         source security-test-env/bin/activate
         python3 tests/security/fuzz_ipc_socket.py
-        
+
     - name: Run permission manipulation tests
       run: |
         source security-test-env/bin/activate
         python3 tests/security/test_permissions.py
-        
+
     - name: Run replay/race condition tests
       run: |
         source security-test-env/bin/activate
         python3 tests/security/test_replay_attacks.py
-        
+
     - name: Run rate limiting tests
       run: |
         source security-test-env/bin/activate
         python3 tests/security/test_rate_limiting.py
-        
+
     - name: Run audit log tests
       run: |
         source security-test-env/bin/activate
         python3 tests/security/test_audit_logging.py
-        
+
     - name: Run UI confusion tests
       run: |
         source security-test-env/bin/activate
         python3 tests/security/test_ui_confusion.py
-        
+
     - name: Upload security test results
       uses: actions/upload-artifact@v4
       if: always()
@@ -97,41 +98,77 @@ jobs:
         path: |
           tests/security/reports/
           build-security/test-results/
-          
+
     - name: Security test summary
       if: always()
       run: |
         echo "## Security Test Summary" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ IPC Socket Fuzzing" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Permission Manipulation Tests" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Replay/Race Condition Tests" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Rate Limiting Tests" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Audit Log Tests" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ UI Confusion Tests" >> $GITHUB_STEP_SUMMARY
+
+        if [ ${{ steps.fuzzing.outcome }} == "success" ]; then
+          echo "- ✅ IPC Socket Fuzzing" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ IPC Socket Fuzzing" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ ${{ steps.permissions.outcome }} == "success" ]; then
+          echo "- ✅ Permission Manipulation Tests" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ Permission Manipulation Tests" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ ${{ steps.replay.outcome }} == "success" ]; then
+          echo "- ✅ Replay/Race Condition Tests" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ Replay/Race Condition Tests" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ ${{ steps.ratelimit.outcome }} == "success" ]; then
+          echo "- ✅ Rate Limiting Tests" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ Rate Limiting Tests" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ ${{ steps.auditlog.outcome }} == "success" ]; then
+          echo "- ✅ Audit Log Tests" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ Audit Log Tests" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ ${{ steps.ui.outcome }} == "success" ]; then
+          echo "- ✅ UI Confusion Tests" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ UI Confusion Tests" >> $GITHUB_STEP_SUMMARY
+        fi
 
   static-analysis:
     name: Static Security Analysis
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
-    - name: Run security linting
+
+    - name: Install security linting tools
       run: |
-        # Install security linting tools
         sudo apt-get update
         sudo apt-get install -y cppcheck clang-tidy
-        
-        # Run cppcheck for security issues
+
+    - name: Run cppcheck for security issues
+      run: |
+        # Run cppcheck, fail if any error or warning is found
         cppcheck --enable=all --inconclusive --xml --xml-version=2 \
           --suppress=missingIncludeSystem \
           --suppress=unmatchedSuppression \
-          src/ 2> cppcheck-results.xml || true
-          
-        # Run clang-tidy for security patterns
-        find src/ -name "*.cpp" -exec clang-tidy {} -- -I src/ \; || true
-        
+          src/ 2> cppcheck-results.xml
+
+    - name: Run clang-tidy for security patterns
+      run: |
+        # Run clang-tidy on all C++ files and fail job if any error is found
+        set -e
+        for file in $(find src/ -name "*.cpp"); do
+          clang-tidy "$file" -- -I src/
+        done
+
     - name: Upload static analysis results
       uses: actions/upload-artifact@v4
       if: always()
