@@ -80,4 +80,7 @@ private:
     // Track active authentication sessions
     QMap<QString, PolkitQt1::Agent::AsyncResult*> m_activeSessions;
     QMap<QString, PolkitQt1::Agent::Session*> m_activePolkitSessions;
+    
+    // Message transformation for user-friendly text
+    QString transformAuthMessage(const QString &actionId, const QString &message, const PolkitQt1::Details &details);
 };

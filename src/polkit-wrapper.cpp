@@ -18,7 +18,10 @@
 
 #include "polkit-wrapper.h"
 #include <polkitqt1-subject.h>
+#include <polkitqt1-details.h>
 #include <QDebug>
+#include <QRegularExpression>
+#include <QFile>
 #include "logging.h"
 #include <QTimer>
 #include <unistd.h>
@@ -224,8 +227,11 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
         // Session created but not initiated yet - wait for user action
     }
     
+    // Transform message for user-friendly text
+    QString transformedMessage = transformAuthMessage(actionId, message, details);
+    
     // Show auth dialog
-    emit showAuthDialog(actionId, message, iconName, cookie);
+    emit showAuthDialog(actionId, transformedMessage, iconName, cookie);
 }
 
 bool PolkitWrapper::initiateAuthenticationFinish()
@@ -271,6 +277,117 @@ void PolkitWrapper::submitAuthenticationResponse(const QString &cookie, const QS
         qCDebug(polkitSensitive) << "Password response for cookie:" << cookie;
         session->setResponse(response);
     }
+}
+
+QString PolkitWrapper::transformAuthMessage(const QString &actionId, const QString &message, const PolkitQt1::Details &details)
+{
+    // Check if message transformation is disabled
+    QString disableTransform = qgetenv("QUICKSHELL_POLKIT_DISABLE_TRANSFORM");
+    if (!disableTransform.isEmpty() && disableTransform != "0" && disableTransform.toLower() != "false") {
+        return message;
+    }
+    
+    // Check if this is a systemd run0 (transient service) request
+    if (actionId == "org.freedesktop.systemd1.manage-units") {
+        qCDebug(polkitAgent) << "Checking systemd manage-units action, message:" << message;
+        
+        // Check if the message indicates a transient service (broader pattern matching)
+        if (message.contains("transient", Qt::CaseInsensitive)) {
+            
+            qCDebug(polkitAgent) << "Detected systemd run0 authorization request";
+            
+            // Try to extract command information using PID from polkit details
+            QString commandInfo;
+            QStringList detailKeys = details.keys();
+            qCDebug(polkitAgent) << "Available detail keys:" << detailKeys;
+            
+            // Get the subject PID to extract command
+            QString subjectPid = details.lookup("polkit.subject-pid");
+            if (!subjectPid.isEmpty()) {
+                qCDebug(polkitAgent) << "Attempting to get command for PID:" << subjectPid;
+                
+                // Try to read the command from /proc/PID/cmdline
+                QString cmdlinePath = QString("/proc/%1/cmdline").arg(subjectPid);
+                QFile cmdlineFile(cmdlinePath);
+                if (cmdlineFile.open(QIODevice::ReadOnly)) {
+                    QByteArray cmdlineData = cmdlineFile.readAll();
+                    cmdlineFile.close();
+                    
+                    // /proc/PID/cmdline has null-separated arguments
+                    QStringList args = QString::fromUtf8(cmdlineData).split('\0', Qt::SkipEmptyParts);
+                    qCDebug(polkitAgent) << "Command line args:" << args;
+                    
+                    if (!args.isEmpty()) {
+                        // Get the command name (remove path)
+                        QString command = args.first();
+                        if (command.contains('/')) {
+                            command = command.split('/').last();
+                        }
+                        
+                        // If it's systemd-run or run0, try to get the actual command
+                        if (command == "systemd-run" || command == "run0") {
+                            qCDebug(polkitAgent) << "Found systemd-run/run0, extracting target command";
+                            // Look for the actual command after systemd-run options
+                            bool foundCommand = false;
+                            for (int i = 1; i < args.size(); ++i) {
+                                const QString &arg = args[i];
+                                // Skip systemd-run options
+                                if (arg.startsWith("--") || arg.startsWith("-")) {
+                                    // Skip option and its value if it takes one
+                                    if (arg.contains("=")) continue;
+                                    if (i + 1 < args.size() && !args[i + 1].startsWith("-")) {
+                                        i++; // Skip option value
+                                    }
+                                    continue;
+                                }
+                                // Found the actual command
+                                command = arg;
+                                if (command.contains('/')) {
+                                    command = command.split('/').last();
+                                }
+                                foundCommand = true;
+                                qCDebug(polkitAgent) << "Found target command:" << command;
+                                break;
+                            }
+                            if (!foundCommand && args.size() > 1) {
+                                command = args.last(); // Fallback to last argument
+                                if (command.contains('/')) {
+                                    command = command.split('/').last();
+                                }
+                                qCDebug(polkitAgent) << "Using fallback command:" << command;
+                            }
+                        }
+                        
+                        commandInfo = command;
+                        qCDebug(polkitAgent) << "Final extracted command:" << commandInfo;
+                    }
+                } else {
+                    qCDebug(polkitAgent) << "Could not read cmdline for PID:" << subjectPid;
+                }
+            }
+            
+            // Check for custom message template from environment
+            QString customTemplate = qgetenv("QUICKSHELL_POLKIT_RUN0_MESSAGE");
+            
+            // Generate user-friendly message
+            if (!customTemplate.isEmpty()) {
+                // Use custom template, replace %1 with command if available
+                if (!commandInfo.isEmpty() && commandInfo != actionId) {
+                    return customTemplate.arg(commandInfo);
+                } else {
+                    // Remove %1 placeholder if no command info available
+                    return customTemplate.replace("%1", "command");
+                }
+            } else if (!commandInfo.isEmpty() && commandInfo != actionId) {
+                return QString("Authentication required to run '%1' with elevated privileges").arg(commandInfo);
+            } else {
+                return "Authentication required to run command with elevated privileges";
+            }
+        }
+    }
+    
+    // For non-run0 requests, return original message
+    return message;
 }
 
 
