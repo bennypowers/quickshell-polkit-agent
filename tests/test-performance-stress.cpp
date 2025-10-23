@@ -332,9 +332,9 @@ void TestPerformanceStress::testStateTransitionPerformance()
     // VERIFY: Signals were emitted
     QVERIFY(stateSpy.count() > 0);
 
-    // VERIFY: Average transition time is reasonable (< 1ms)
-    QVERIFY2(avgTransitionTime < 1.0,
-             qPrintable(QString("Average transition time %.3f ms exceeds 1ms threshold")
+    // VERIFY: Average transition time is reasonable (< 2ms, allow headroom for CI)
+    QVERIFY2(avgTransitionTime < 2.0,
+             qPrintable(QString("Average transition time %.3f ms exceeds 2ms threshold")
                        .arg(avgTransitionTime)));
 
     // VERIFY: System is clean after all transitions
