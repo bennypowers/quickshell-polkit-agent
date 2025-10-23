@@ -329,10 +329,13 @@ cleanup() {
     log_info "Cleaning up..."
     stop_agent
 
-    # Stop D-Bus if we started it
-    if [ -n "$DBUS_SESSION_BUS_PID" ]; then
-        kill $DBUS_SESSION_BUS_PID 2>/dev/null || true
+    # Stop polkitd if we started it
+    if [ -n "$POLKITD_PID" ]; then
+        kill $POLKITD_PID 2>/dev/null || true
     fi
+
+    # Stop D-Bus system bus if running
+    pkill -x dbus-daemon 2>/dev/null || true
 
     # Print summary
     echo ""
@@ -363,14 +366,61 @@ main() {
     # Create test results directory
     mkdir -p "$TEST_RESULTS_DIR"
 
+    # Start D-Bus system bus if not running
+    if [ ! -S /var/run/dbus/system_bus_socket ]; then
+        log_info "Starting D-Bus system bus..."
+        mkdir -p /var/run/dbus
+        dbus-daemon --system --fork
+        sleep 1
+        if [ -S /var/run/dbus/system_bus_socket ]; then
+            log_info "D-Bus system bus started"
+        else
+            log_error "Failed to start D-Bus system bus"
+            exit 1
+        fi
+    fi
+
+    # Start polkitd if not running (it registers on system bus)
+    if ! pgrep -x polkitd > /dev/null; then
+        log_info "Starting polkitd..."
+        if [ -x /usr/lib/polkit-1/polkitd ]; then
+            /usr/lib/polkit-1/polkitd --no-debug &
+        elif [ -x /usr/libexec/polkitd ]; then
+            /usr/libexec/polkitd --no-debug &
+        else
+            log_error "polkitd not found in /usr/lib/polkit-1 or /usr/libexec"
+            exit 1
+        fi
+        POLKITD_PID=$!
+        sleep 2
+        log_info "polkitd started (PID: $POLKITD_PID)"
+    fi
+
+    # Verify polkit-agent-helper-1 is setuid root
+    HELPER_PATH=""
+    if [ -f /usr/lib/polkit-1/polkit-agent-helper-1 ]; then
+        HELPER_PATH="/usr/lib/polkit-1/polkit-agent-helper-1"
+    elif [ -f /usr/libexec/polkit-1/polkit-agent-helper-1 ]; then
+        HELPER_PATH="/usr/libexec/polkit-1/polkit-agent-helper-1"
+    fi
+
+    if [ -n "$HELPER_PATH" ]; then
+        HELPER_PERMS=$(stat -c "%a" "$HELPER_PATH")
+        if [ "$HELPER_PERMS" != "4755" ]; then
+            log_warn "polkit-agent-helper-1 is not setuid root (perms: $HELPER_PERMS)"
+            log_warn "Some authentication tests may fail"
+        else
+            log_info "polkit-agent-helper-1 is properly configured (setuid root)"
+        fi
+    fi
+
     # Authentication state integration tests (container-only)
     # These tests require polkit-agent-helper-1 to be setuid root
-    # Run these first as they don't need the full agent running
     test_authentication_state_integration
 
     # Full agent integration tests require system D-Bus
     # TODO: Set up proper systemd container for full agent tests
-    log_info "Skipping full agent tests (require system D-Bus setup)"
+    log_info "Container E2E tests completed"
 }
 
 main "$@"
