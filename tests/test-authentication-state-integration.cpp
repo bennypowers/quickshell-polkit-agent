@@ -124,18 +124,52 @@ void TestAuthenticationStateIntegration::testNormalPasswordAuthentication()
     // Test harness IS available (testTriggerAuthentication)
     // What's missing: PAM simulation to provide password and verify auth success
 
-    // This test requires PAM to:
-    // 1. Request password
-    // 2. Receive password response
-    // 3. Validate and complete with success
-    //
-    // State transitions would be:
-    // IDLE → INITIATED → WAITING_FOR_PASSWORD → AUTHENTICATING → COMPLETED → IDLE
+    // VERIFY: Initial state
+    QVERIFY(!m_wrapper->hasActiveSessions());
 
-    // NOTE: This test runs in E2E container environment only (needs polkit-agent-helper-1 setuid)
-    // Expected to SKIP or FAIL when run locally without proper polkit setup
+    // Disable FIDO so we go straight to password auth
+    qputenv("FIDO_TEST_MODE", "unavailable");
 
-    QSKIP("Test implementation pending - requires PAM password flow simulation");
+    // Trigger authentication
+    m_wrapper->testTriggerAuthentication(testActionId, "Test password auth", "dialog-password", testCookie);
+    QTest::qWait(200);
+
+    // VERIFY: Auth dialog shown
+    QVERIFY(authDialogSpy.count() > 0);
+    QVERIFY(m_wrapper->hasActiveSessions());
+
+    // Wait for password prompt
+    QTest::qWait(300);
+
+    // Check if PAM helper is running (indicates we're in E2E mode)
+    AuthenticationState currentState = m_wrapper->authenticationState(testCookie);
+    if (currentState != AuthenticationState::WAITING_FOR_PASSWORD) {
+        qWarning() << "WAITING_FOR_PASSWORD state not reached - polkit-agent-helper-1 may not be setuid";
+        qWarning() << "This test requires E2E container environment";
+        m_wrapper->cancelAuthorization();
+        QSKIP("Polkit helper not properly configured - run in E2E container");
+    }
+
+    // VERIFY: Password request shown
+    QVERIFY(passwordRequestSpy.count() > 0);
+
+    // Submit correct password (testuser:testpass in container)
+    m_wrapper->submitAuthenticationResponse(testCookie, "testpass");
+    QTest::qWait(500);
+
+    // VERIFY: Password was accepted (state reaches AUTHENTICATING)
+    bool foundAuthenticating = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        if (stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::AUTHENTICATING) {
+            foundAuthenticating = true;
+            break;
+        }
+    }
+    QVERIFY2(foundAuthenticating, "Expected AUTHENTICATING state after password submission");
+
+    // NOTE: COMPLETED state requires AsyncResult which testTriggerAuthentication doesn't provide
+    // In real usage, polkitd provides AsyncResult and COMPLETED state is reached
+    // For test harness, we verify the PAM flow works (password accepted)
 }
 
 /*
@@ -260,23 +294,60 @@ void TestAuthenticationStateIntegration::testFidoSuccessWithoutPasswordPrompt()
 
     QString testCookie = "test-cookie-fido-success";
 
-    // FIDO success path IS implemented
-    // States: IDLE → INITIATED → TRYING_FIDO → AUTHENTICATING → COMPLETED
+    // VERIFY: Initial state
+    QVERIFY(!m_wrapper->hasActiveSessions());
 
-    // What's missing for this test:
-    // 1. Mock NFC reader detection (currently uses lsusb)
-    // 2. Mock FIDO token present
-    // 3. PAM simulation to:
-    //    - Detect FIDO authentication
-    //    - Succeed quickly (before timeout)
-    //    - Complete with success
-    //
-    // VERIFY: Password prompt was NEVER shown
-    // VERIFY: Authentication succeeded
-    // VERIFY: State went TRYING_FIDO → COMPLETED (no password state)
+    // Set mock NFC reader to present
+    m_mockNfc->setPresent(true);
 
-    // NOTE: This test runs in E2E container environment (needs polkit-agent-helper-1 setuid)
-    QSKIP("Test implementation pending - requires PAM FIDO success simulation");
+    // Configure FIDO mock to succeed quickly
+    qputenv("FIDO_TEST_MODE", "success");
+    qputenv("FIDO_TEST_DELAY", "500");  // 500ms delay
+
+    QString testActionId = "org.example.fido-success";
+
+    // Trigger authentication
+    m_wrapper->testTriggerAuthentication(testActionId, "Test FIDO success", "dialog-password", testCookie);
+    QTest::qWait(200);
+
+    // VERIFY: Session active
+    QVERIFY(m_wrapper->hasActiveSessions());
+
+    // Wait for FIDO attempt
+    QTest::qWait(800);
+
+    // Check if we got to TRYING_FIDO (indicates polkit helper is working)
+    bool reachedTryingFido = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        if (stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::TRYING_FIDO) {
+            reachedTryingFido = true;
+            break;
+        }
+    }
+
+    if (!reachedTryingFido) {
+        qWarning() << "TRYING_FIDO state not reached - polkit-agent-helper-1 may not be setuid";
+        qWarning() << "This test requires E2E container environment";
+        m_wrapper->cancelAuthorization();
+        QSKIP("Polkit helper not properly configured - run in E2E container");
+    }
+
+    // VERIFY: Password prompt was NEVER shown (FIDO succeeded)
+    QCOMPARE(passwordRequestSpy.count(), 0);
+
+    // VERIFY: FIDO authentication succeeded (reaches AUTHENTICATING)
+    bool foundAuthenticating = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        if (stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::AUTHENTICATING) {
+            foundAuthenticating = true;
+            break;
+        }
+    }
+    QVERIFY2(foundAuthenticating, "Expected AUTHENTICATING state after successful FIDO auth");
+
+    // NOTE: COMPLETED state requires AsyncResult which testTriggerAuthentication doesn't provide
+    // In real usage, polkitd provides AsyncResult and COMPLETED state is reached
+    // For test harness, we verify FIDO flow works (no password prompt, FIDO succeeds)
 }
 
 /*
@@ -363,24 +434,64 @@ void TestAuthenticationStateIntegration::testWrongPasswordRetry()
 
     QString testCookie = "test-cookie-retry";
 
-    // Step 1: Auth initiated
-    // Step 2: User submits wrong password
-    // Step 3: PAM returns error
+    // VERIFY: Initial state
+    QVERIFY(!m_wrapper->hasActiveSessions());
 
-    // VERIFY: Error signal emitted with user-friendly message
-    // VERIFY: State allows retry (not terminal error)
-    // VERIFY: Session NOT cleaned up yet
+    // Disable FIDO so we go straight to password auth
+    qputenv("FIDO_TEST_MODE", "unavailable");
 
-    // Step 4: User submits correct password
-    // VERIFY: Authentication succeeds
-    // VERIFY: Session cleaned up
+    QString testActionId = "org.example.retry-test";
 
-    // NOTE: State machine differentiates AUTHENTICATION_FAILED (recoverable) from
-    // ERROR/MAX_RETRIES_EXCEEDED (terminal). Session cleanup happens on completed() signal.
-    // This test requires PAM simulation to trigger failed auth without completion.
+    // Trigger authentication
+    m_wrapper->testTriggerAuthentication(testActionId, "Test wrong password", "dialog-password", testCookie);
+    QTest::qWait(200);
 
-    // NOTE: This test runs in E2E container environment (needs polkit-agent-helper-1 setuid)
-    QSKIP("Test implementation pending - requires PAM wrong password simulation");
+    // Wait for password prompt
+    QTest::qWait(300);
+
+    // Check if PAM helper is running
+    AuthenticationState currentState = m_wrapper->authenticationState(testCookie);
+    if (currentState != AuthenticationState::WAITING_FOR_PASSWORD) {
+        qWarning() << "WAITING_FOR_PASSWORD state not reached - polkit-agent-helper-1 may not be setuid";
+        m_wrapper->cancelAuthorization();
+        QSKIP("Polkit helper not properly configured - run in E2E container");
+    }
+
+    QSignalSpy stateChangeSpy(m_wrapper, &PolkitWrapper::authenticationStateChanged);
+
+    // Submit WRONG password
+    m_wrapper->submitAuthenticationResponse(testCookie, "wrongpassword");
+    QTest::qWait(500);
+
+    // VERIFY: Session still active (retry allowed)
+    QVERIFY(m_wrapper->hasActiveSessions());
+
+    // VERIFY: State went back to WAITING_FOR_PASSWORD (retry)
+    bool foundWaitingAgain = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        if (stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::WAITING_FOR_PASSWORD) {
+            foundWaitingAgain = true;
+            break;
+        }
+    }
+    QVERIFY2(foundWaitingAgain, "Expected return to WAITING_FOR_PASSWORD for retry");
+
+    // Submit CORRECT password
+    m_wrapper->submitAuthenticationResponse(testCookie, "testpass");
+    QTest::qWait(500);
+
+    // VERIFY: Password accepted (reaches AUTHENTICATING)
+    bool foundAuthenticating = false;
+    for (int i = stateChangeSpy.count() - 5; i < stateChangeSpy.count(); i++) {
+        if (i >= 0 && stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::AUTHENTICATING) {
+            foundAuthenticating = true;
+            break;
+        }
+    }
+    QVERIFY2(foundAuthenticating, "Expected AUTHENTICATING state after correct password");
+
+    // NOTE: Error/result signals require AsyncResult which testTriggerAuthentication doesn't provide
+    // We verify the retry flow works (wrong password → retry → correct password accepted)
 }
 
 /*
@@ -405,20 +516,66 @@ void TestAuthenticationStateIntegration::testMultipleWrongPasswordsMaxRetries()
 
     QString testCookie = "test-cookie-maxretries";
 
-    // Step 1: Wrong password attempt 1
-    // Step 2: Wrong password attempt 2
-    // Step 3: Wrong password attempt 3
+    // VERIFY: Initial state
+    QVERIFY(!m_wrapper->hasActiveSessions());
 
-    // VERIFY: After 3rd attempt, error message is specific
-    // VERIFY: Session is terminated
-    // VERIFY: State is terminal (not allowing retry)
+    // Disable FIDO so we go straight to password auth
+    qputenv("FIDO_TEST_MODE", "unavailable");
 
-    // IMPLEMENTED: SessionState.retryCount tracks attempts (max 3)
-    // IMPLEMENTED: MAX_RETRIES_EXCEEDED state and error message
-    // This test requires PAM simulation to trigger multiple auth failures.
+    QString testActionId = "org.example.maxretries-test";
 
-    // NOTE: This test runs in E2E container environment (needs polkit-agent-helper-1 setuid)
-    QSKIP("Test implementation pending - requires PAM multiple wrong password simulation");
+    QSignalSpy errorSpy(m_wrapper, &PolkitWrapper::authorizationError);
+    QSignalSpy resultSpy(m_wrapper, &PolkitWrapper::authorizationResult);
+    QSignalSpy stateChangeSpy(m_wrapper, &PolkitWrapper::authenticationStateChanged);
+
+    // Trigger authentication
+    m_wrapper->testTriggerAuthentication(testActionId, "Test max retries", "dialog-password", testCookie);
+    QTest::qWait(200);
+
+    // Wait for password prompt
+    QTest::qWait(300);
+
+    // Check if PAM helper is running
+    AuthenticationState currentState = m_wrapper->authenticationState(testCookie);
+    if (currentState != AuthenticationState::WAITING_FOR_PASSWORD) {
+        qWarning() << "WAITING_FOR_PASSWORD state not reached - polkit-agent-helper-1 may not be setuid";
+        m_wrapper->cancelAuthorization();
+        QSKIP("Polkit helper not properly configured - run in E2E container");
+    }
+
+    // Attempt 1: Wrong password
+    m_wrapper->submitAuthenticationResponse(testCookie, "wrong1");
+    QTest::qWait(500);
+    QVERIFY(m_wrapper->hasActiveSessions());
+    QCOMPARE(m_wrapper->sessionRetryCount(testCookie), 1);
+
+    // Attempt 2: Wrong password
+    m_wrapper->submitAuthenticationResponse(testCookie, "wrong2");
+    QTest::qWait(500);
+    QVERIFY(m_wrapper->hasActiveSessions());
+    QCOMPARE(m_wrapper->sessionRetryCount(testCookie), 2);
+
+    // Attempt 3: Wrong password (should hit max retries)
+    m_wrapper->submitAuthenticationResponse(testCookie, "wrong3");
+    QTest::qWait(500);
+    QCOMPARE(m_wrapper->sessionRetryCount(testCookie), 3);
+
+    // VERIFY: State reached MAX_RETRIES_EXCEEDED
+    bool foundMaxRetries = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        if (stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::MAX_RETRIES_EXCEEDED) {
+            foundMaxRetries = true;
+            break;
+        }
+    }
+    QVERIFY2(foundMaxRetries, "Expected MAX_RETRIES_EXCEEDED state after 3 wrong passwords");
+
+    // VERIFY: Session terminated
+    QTest::qWait(100);
+    QVERIFY(!m_wrapper->hasActiveSessions());
+
+    // NOTE: Error signal requires AsyncResult which testTriggerAuthentication doesn't provide
+    // We verify the max retries logic works (retry count tracked, session terminated)
 }
 
 /*
@@ -475,9 +632,51 @@ void TestAuthenticationStateIntegration::testStateTransitionFromIdleToAuthentica
  */
 void TestAuthenticationStateIntegration::testStateTransitionToCompletedOnSuccess()
 {
-    // Start auth → simulate success → verify state is COMPLETED → verify cleanup
-    // NOTE: This test runs in E2E container environment (needs polkit-agent-helper-1 setuid)
-    QSKIP("Test implementation pending - requires PAM authentication success simulation");
+    QSignalSpy stateChangeSpy(m_wrapper, &PolkitWrapper::authenticationStateChanged);
+    QSignalSpy resultSpy(m_wrapper, &PolkitWrapper::authorizationResult);
+
+    QString testCookie = "test-cookie-success-transition";
+    QString testActionId = "org.example.success-transition";
+
+    // Disable FIDO so we go straight to password auth
+    qputenv("FIDO_TEST_MODE", "unavailable");
+
+    // VERIFY: Initial state
+    QVERIFY(!m_wrapper->hasActiveSessions());
+    QCOMPARE(m_wrapper->authenticationState(testCookie), AuthenticationState::IDLE);
+
+    // Trigger authentication
+    m_wrapper->testTriggerAuthentication(testActionId, "Test success transition", "dialog-password", testCookie);
+    QTest::qWait(200);
+
+    // Wait for password prompt
+    QTest::qWait(300);
+
+    // Check if PAM helper is running
+    AuthenticationState currentState = m_wrapper->authenticationState(testCookie);
+    if (currentState != AuthenticationState::WAITING_FOR_PASSWORD) {
+        qWarning() << "WAITING_FOR_PASSWORD state not reached - polkit-agent-helper-1 may not be setuid";
+        m_wrapper->cancelAuthorization();
+        QSKIP("Polkit helper not properly configured - run in E2E container");
+    }
+
+    // Submit correct password
+    m_wrapper->submitAuthenticationResponse(testCookie, "testpass");
+    QTest::qWait(500);
+
+    // VERIFY: Password accepted (state reaches AUTHENTICATING)
+    bool foundAuthenticating = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        if (stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::AUTHENTICATING) {
+            foundAuthenticating = true;
+            break;
+        }
+    }
+    QVERIFY2(foundAuthenticating, "Expected AUTHENTICATING state after successful password");
+
+    // NOTE: COMPLETED state requires AsyncResult which testTriggerAuthentication doesn't provide
+    // In real usage with polkitd, the state would transition: AUTHENTICATING → COMPLETED → IDLE
+    // For test harness, we verify the state machine progresses correctly to AUTHENTICATING
 }
 
 /*
@@ -485,10 +684,61 @@ void TestAuthenticationStateIntegration::testStateTransitionToCompletedOnSuccess
  */
 void TestAuthenticationStateIntegration::testStateTransitionToIdleOnError()
 {
-    // Start auth → simulate error → verify state returns to IDLE
+    QSignalSpy stateChangeSpy(m_wrapper, &PolkitWrapper::authenticationStateChanged);
+    QSignalSpy errorSpy(m_wrapper, &PolkitWrapper::authorizationError);
+
+    QString testCookie = "test-cookie-error-transition";
+    QString testActionId = "org.example.error-transition";
+
+    // Disable FIDO so we go straight to password auth
+    qputenv("FIDO_TEST_MODE", "unavailable");
+
+    // VERIFY: Initial state
+    QVERIFY(!m_wrapper->hasActiveSessions());
+    QCOMPARE(m_wrapper->authenticationState(testCookie), AuthenticationState::IDLE);
+
+    // Trigger authentication
+    m_wrapper->testTriggerAuthentication(testActionId, "Test error transition", "dialog-password", testCookie);
+    QTest::qWait(200);
+
+    // Wait for password prompt
+    QTest::qWait(300);
+
+    // Check if PAM helper is running
+    AuthenticationState currentState = m_wrapper->authenticationState(testCookie);
+    if (currentState != AuthenticationState::WAITING_FOR_PASSWORD) {
+        qWarning() << "WAITING_FOR_PASSWORD state not reached - polkit-agent-helper-1 may not be setuid";
+        m_wrapper->cancelAuthorization();
+        QSKIP("Polkit helper not properly configured - run in E2E container");
+    }
+
+    // Submit wrong passwords 3 times to trigger max retries error
+    m_wrapper->submitAuthenticationResponse(testCookie, "wrong1");
+    QTest::qWait(500);
+    m_wrapper->submitAuthenticationResponse(testCookie, "wrong2");
+    QTest::qWait(500);
+    m_wrapper->submitAuthenticationResponse(testCookie, "wrong3");
+    QTest::qWait(500);
+
+    // VERIFY: State reached MAX_RETRIES_EXCEEDED
+    bool foundMaxRetries = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        if (stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::MAX_RETRIES_EXCEEDED) {
+            foundMaxRetries = true;
+            break;
+        }
+    }
+    QVERIFY2(foundMaxRetries, "Expected MAX_RETRIES_EXCEEDED state after 3 wrong passwords");
+
+    // VERIFY: State returned to IDLE
+    QTest::qWait(100);
+    QCOMPARE(m_wrapper->authenticationState(testCookie), AuthenticationState::IDLE);
+
     // VERIFY: All session data cleaned up
-    // NOTE: This test runs in E2E container environment (needs polkit-agent-helper-1 setuid)
-    QSKIP("Test implementation pending - requires PAM authentication error simulation");
+    QVERIFY(!m_wrapper->hasActiveSessions());
+
+    // NOTE: Error signal requires AsyncResult which testTriggerAuthentication doesn't provide
+    // We verify the error handling flow works (max retries → state transition → cleanup)
 }
 
 /*
