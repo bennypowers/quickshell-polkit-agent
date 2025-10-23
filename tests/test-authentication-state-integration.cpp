@@ -93,8 +93,9 @@ void TestAuthenticationStateIntegration::cleanup()
     m_mockNfc = nullptr;
 
     // Extra cleanup delay in E2E mode to ensure polkit daemon is ready for next test
+    // PAM helper process shutdown is asynchronous and can take time
     if (qgetenv("POLKIT_E2E_MODE") == "1") {
-        QTest::qWait(200);
+        QTest::qWait(500); // Increased from 200ms - give polkitd time to fully clean up
     }
 }
 
