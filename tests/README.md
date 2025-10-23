@@ -43,43 +43,63 @@ These tests require:
 
 ## Running Tests
 
-### Local Unit Tests (CTest)
+### Quick Start
 
-These tests run locally and are safe to execute on developer machines:
-
-#### Method 1: Using the test runner script
 ```bash
-./run-tests.sh
-```
-
-#### Method 2: Manual build and run
-```bash
-mkdir build-tests && cd build-tests
+# Build with tests enabled
+mkdir build && cd build
 cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
 make
-ctest --output-on-failure
+
+# Run local unit tests (fast, safe)
+make test
+
+# Run ALL tests in container (comprehensive, includes E2E and auth tests)
+make test-container
 ```
 
-#### Method 3: Individual test execution
+### Local Unit Tests
+
+Standard `make test` runs CTest locally - safe and fast for development:
+
 ```bash
-cd build-tests/tests
+cd build
+make test
+```
+
+This runs:
+- Message validation tests
+- Security manager tests (HMAC, timestamps, etc.)
+- Simple integration tests
+- LocalSocket validation tests
+- Performance/stress tests
+
+**Individual test execution:**
+```bash
+cd build/tests
 ./test-message-validator
 ./test-security
 ./test-simple-integration
 ```
 
-**Note:** The authentication state integration tests are intentionally excluded from CTest. They require privileged operations and run only in the E2E container environment.
+**Note:** Authentication state integration tests are excluded from local CTest. They require privileged operations and run only in containers.
 
-### Container-Only Tests (E2E)
+### Container Tests (All Tests)
 
-For full integration testing including authentication flows:
+For comprehensive testing including authentication flows:
 
 ```bash
-# Run all tests in isolated container environment
-./tests/e2e/run-podman-e2e.sh
+cd build
+make test-container
 ```
 
-See `tests/e2e/README.md` for details on container-only tests.
+This runs ALL tests in an isolated container with:
+- Full polkit daemon + D-Bus
+- PAM wrapper for authentication testing
+- FIDO mock modules
+- All E2E integration tests
+
+See `tests/e2e/README.md` for details.
 
 ## Test Requirements
 

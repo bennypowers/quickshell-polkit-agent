@@ -231,26 +231,27 @@ make
 
 ### Testing
 
-**Run all tests:**
+**Quick local tests:**
 ```bash
 mkdir build && cd build
 cmake .. -DBUILD_TESTS=ON
 make -j$(nproc)
-ctest --output-on-failure
+make test
+```
+
+**Comprehensive testing (all tests in container):**
+```bash
+make test-container
 ```
 
 **Test suites:**
-- **Unit Tests** (12 tests) - MessageValidator, SecurityManager, LocalSocket, etc.
-- **Integration Tests** - Authentication state machine with 4 passing, 13 skipped (need PAM)
-- **Security Tests** (7 Python tests) - Fuzzing, permissions, replay attacks, rate limiting
-- **E2E Tests** (Podman) - Real polkit daemon integration
+- **Unit Tests** - MessageValidator, SecurityManager, LocalSocket, performance
+- **Integration Tests** - Authentication state machine, FIDO flows (container-only)
+- **E2E Tests** - Real polkit daemon integration (container-only)
 
-**Run specific test suites:**
-```bash
-make run-tests              # All C++ tests
-make run-security-tests     # Python security tests only
-make run-e2e-tests         # Podman E2E tests only
-```
+The simplified approach:
+- `make test` - Fast local unit tests (safe for development)
+- `make test-container` - ALL tests in isolated Podman container
 
 ### Troubleshooting
 ```bash

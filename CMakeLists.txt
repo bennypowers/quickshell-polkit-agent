@@ -64,4 +64,15 @@ option(BUILD_TESTS "Build unit tests" OFF)
 if(BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+
+    # Custom test targets for convenience
+    # "make test" runs local unit tests via CTest (safe, fast)
+    # "make test-container" runs all tests in container (comprehensive)
+
+    add_custom_target(test-container
+        COMMAND ${CMAKE_SOURCE_DIR}/tests/e2e/run-podman-e2e.sh
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Running all tests in E2E container environment"
+        USES_TERMINAL
+    )
 endif()

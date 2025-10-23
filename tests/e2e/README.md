@@ -41,13 +41,17 @@ The E2E tests verify:
 ### Quick Start
 
 ```bash
-# From project root
+# Recommended: Use CMake target (from build directory)
+cd build
+make test-container
+
+# Or run directly
 ./tests/e2e/run-podman-e2e.sh
 ```
 
-This script will:
+This will:
 1. Build a container with all dependencies
-2. Run the E2E tests inside the container
+2. Run ALL tests inside the container (unit + E2E + auth)
 3. Report results
 
 ### Manual Container Run
