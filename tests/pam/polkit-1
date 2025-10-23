@@ -16,8 +16,8 @@
 
 # Try FIDO authentication first (if pam_fido_mock.so is available)
 # This will check FIDO_TEST_MODE environment variable
-# Use absolute path in same directory as this config file
-auth        sufficient    /home/bennyp/Developer/quickshell-polkit-agent/tests/pam/pam_fido_mock.so
+# Module must be in the same directory as this config file
+auth        sufficient    pam_fido_mock.so
 
 # Fallback to always-succeed for basic testing
 auth        required      pam_permit.so
