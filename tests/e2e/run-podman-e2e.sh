@@ -52,6 +52,9 @@ fi
 # Run tests in container
 log_info "Running e2e tests in container..."
 
+# Create test-results directory if it doesn't exist
+mkdir -p "$SCRIPT_DIR/test-results"
+
 # Run with:
 # - Privileged mode for polkit daemon
 # - Volume mount for test results
