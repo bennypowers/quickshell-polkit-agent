@@ -70,6 +70,26 @@ target_link_libraries(test-authentication-state-integration
 # Add the test first
 add_test(NAME AuthenticationStateIntegration COMMAND test-authentication-state-integration)
 
+# Performance and stress tests
+add_executable(test-performance-stress
+    test-performance-stress.cpp
+    ../src/polkit-wrapper.cpp
+    ../src/logging.cpp
+)
+
+# Enable test-only methods
+target_compile_definitions(test-performance-stress PRIVATE BUILD_TESTING=1)
+
+target_link_libraries(test-performance-stress
+    Qt6::Test
+    Qt6::Core
+    Qt6::Network
+    PolkitQt6-1::Core
+    PolkitQt6-1::Agent
+)
+
+add_test(NAME PerformanceStress COMMAND test-performance-stress)
+
 # Configure test with pam_wrapper if available
 find_library(PAM_WRAPPER_LIBRARY NAMES pam_wrapper)
 if(PAM_WRAPPER_LIBRARY)
@@ -138,7 +158,7 @@ endif()
 # Add custom target to run all tests
 add_custom_target(run-tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test-message-validator test-security test-simple-integration test-localsocket-validation test-authentication-state-integration
+    DEPENDS test-message-validator test-security test-simple-integration test-localsocket-validation test-authentication-state-integration test-performance-stress
     COMMENT "Running all tests"
 )
 
