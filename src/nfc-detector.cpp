@@ -19,25 +19,52 @@
 #include "nfc-detector.h"
 #include "logging.h"
 #include <QProcess>
+#include <QStringList>
 
 bool UsbNfcDetector::isPresent()
 {
     QProcess lsusb;
     lsusb.start("lsusb");
 
-    // Short timeout - if lsusb takes >100ms, USB subsystem likely has issues
-    if (!lsusb.waitForFinished(100)) {
-        qCDebug(polkitAgent) << "lsusb command timed out or not available";
+    // Check if process started successfully
+    if (lsusb.state() == QProcess::NotRunning) {
+        qCDebug(polkitAgent) << "Failed to start lsusb - command not available";
+        return false;
+    }
+
+    // Timeout increased to handle systems with many USB devices or under load
+    if (!lsusb.waitForFinished(500)) {
+        qCDebug(polkitAgent) << "lsusb command timed out:" << lsusb.errorString();
         lsusb.kill();
+        return false;
+    }
+
+    // Check for process errors after completion
+    if (lsusb.exitStatus() != QProcess::NormalExit || lsusb.exitCode() != 0) {
+        qCDebug(polkitAgent) << "lsusb command failed:" << lsusb.errorString();
         return false;
     }
 
     QString output = QString::fromUtf8(lsusb.readAllStandardOutput()).toLower();
 
-    // Check for ACR122U NFC reader (vendor ID 072f:)
-    bool nfcPresent = output.contains("072f:") || output.contains("acr122");
+    // Known NFC/FIDO device identifiers
+    // Add new device vendor IDs or product names here as needed
+    static const QStringList knownDevices = {
+        "072f:",     // ACS (ACR122U and other readers)
+        "acr122",    // ACR122U by name
+        "1050:",     // Yubico vendor ID
+        "yubikey",   // YubiKey by name
+        // Add more devices here as needed
+    };
 
-    qCDebug(polkitAgent) << "NFC reader detection:" << (nfcPresent ? "ACR122U found" : "No NFC reader");
+    // Check if any known device is present
+    for (const QString& device : knownDevices) {
+        if (output.contains(device)) {
+            qCDebug(polkitAgent) << "NFC/FIDO device detected:" << device;
+            return true;
+        }
+    }
 
-    return nfcPresent;
+    qCDebug(polkitAgent) << "No NFC/FIDO reader detected";
+    return false;
 }

@@ -1,12 +1,13 @@
 #%PAM-1.0
-# Mock PAM configuration for testing - FIDO/U2F authentication
-# Used by pam_wrapper to simulate security key authentication
+# Mock PAM configuration for basic testing
+# Used by pam_wrapper for basic test scenarios
 #
-# Simulates the behavior of pam_u2f:
-# 1. First prompt: silently checks for FIDO device (empty response)
-# 2. If no device, falls back to password
+# This config uses pam_permit.so which always permits authentication
+# without performing any security checks. Use this for simple tests only.
+#
+# Note: FIDO authentication simulation is implemented via pam_fido_mock.so
+# in the polkit-1 and polkit-1-fido configs, not in this file.
 
-# For testing, we use pam_permit but with special handling in tests
 auth     sufficient   pam_permit.so
 account  sufficient   pam_permit.so
 password sufficient   pam_permit.so

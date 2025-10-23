@@ -36,7 +36,7 @@ jobs:
         mkdir -p build
         cd build
         cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
-        make -j$(nproc)
+        make -j"$(nproc)"
         make test
 
     - name: Upload test results
@@ -118,9 +118,9 @@ jobs:
     - name: Test summary
       if: always()
       run: |
-        echo "## Container Test Summary" >> $GITHUB_STEP_SUMMARY
-        if [ ${{ steps.container_tests.outcome }} == "success" ]; then
-          echo "- ✅ All tests passed in container" >> $GITHUB_STEP_SUMMARY
+        echo "## Container Test Summary" >> "$GITHUB_STEP_SUMMARY"
+        if [ "${{ steps.container_tests.outcome }}" == "success" ]; then
+          echo "- ✅ All tests passed in container" >> "$GITHUB_STEP_SUMMARY"
         else
-          echo "- ❌ Container tests failed" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ Container tests failed" >> "$GITHUB_STEP_SUMMARY"
         fi

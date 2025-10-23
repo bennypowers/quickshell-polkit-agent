@@ -27,6 +27,10 @@
 /* Simulate FIDO device wait */
 static void simulate_fido_wait(pam_handle_t *pamh, int delay_ms)
 {
+    /* Clamp delay to sane range for tests */
+    if (delay_ms < 0) delay_ms = 0;
+    if (delay_ms > 60000) delay_ms = 60000;  /* cap at 60s */
+
     pam_syslog(pamh, LOG_INFO, "pam_fido_mock: Simulating FIDO device wait (%dms)", delay_ms);
     usleep(delay_ms * 1000);
 }

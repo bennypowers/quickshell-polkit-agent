@@ -60,10 +60,12 @@ public slots:
     void initiate()
     {
         m_initiated = true;
+        m_cancelled = false;
 
         // Simulate PAM conversation starting
         // Real PAM would call our conversation function, we simulate with timer
         QTimer::singleShot(50, this, [this]() {
+            if (m_cancelled) return;
             if (m_simulateFido) {
                 // Simulate FIDO attempt (first request with empty response expected)
                 emit request("Touch your security key", false);
@@ -85,6 +87,7 @@ public slots:
     void setResponse(const QString &response)
     {
         QTimer::singleShot(50, this, [this, response]() {
+            if (m_cancelled) return;
             if (m_simulateFido && response.isEmpty()) {
                 // Empty response for FIDO attempt
                 if (m_fidoShouldSucceed) {
@@ -105,6 +108,8 @@ public slots:
 
     void cancel()
     {
+        m_cancelled = true;
+        if (!m_initiated) return;
         // Simulate cancellation
         emit completed(false);
     }
@@ -126,4 +131,5 @@ private:
     bool m_simulateFido = false;
     bool m_fidoShouldSucceed = false;
     int m_requestCount;
+    bool m_cancelled = false;
 };

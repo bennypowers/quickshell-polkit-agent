@@ -92,7 +92,7 @@ Once installed and configured, custom authentication dialogs will automatically 
 
 **Authentication Flow:**
 - `showAuthDialog(actionId, message, iconName, cookie)` - Authentication required, show UI
-- `showPasswordRequest(actionId, request, echo, cookie)` - Password needed (FIDO fallback)
+- `showPasswordRequest(actionId, request, echo, cookie)` - PAM requests input (password or FIDO prompt)
 - `authorizationResult(authorized, actionId)` - Final result received
 - `authorizationError(error)` - General/authority errors (used by IPC protocol)
 
@@ -105,7 +105,7 @@ Once installed and configured, custom authentication dialogs will automatically 
 **State Tracking:**
 - `authenticationStateChanged(cookie, AuthenticationState)` - Session state transition
 - `authenticationMethodChanged(cookie, AuthenticationMethod)` - Auth method changed
-- `authenticationMethodFailed(cookie, method, reason)` - Method failed (e.g., FIDO timeout)
+- `authenticationMethodFailed(cookie, method, reason)` - Method failed
 
 **Comprehensive Error Handling:**
 ```qml
@@ -133,8 +133,6 @@ onAuthenticationError: function(cookie, state, method, defaultMessage, technical
 enum AuthenticationState {
     IDLE,                     // No authentication in progress
     INITIATED,                // Request received, session created
-    TRYING_FIDO,              // Auto-attempting FIDO/U2F
-    FIDO_FAILED,              // FIDO failed, preparing fallback
     WAITING_FOR_PASSWORD,     // Password prompt shown
     AUTHENTICATING,           // PAM processing credentials
     AUTHENTICATION_FAILED,    // Failed (recoverable - can retry)
@@ -145,8 +143,9 @@ enum AuthenticationState {
 }
 ```
 
+**Note:** FIDO authentication is handled entirely by PAM (via `pam_u2f` if configured). The agent responds reactively to PAM prompts without managing FIDO flow directly.
+
 ##### UI State Mapping
-- `TRYING_FIDO` → Show "Waiting for security key..." with spinner
 - `WAITING_FOR_PASSWORD` → Show password input field
 - `AUTHENTICATING` → Show "Checking credentials..." with spinner
 - `AUTHENTICATION_FAILED` → Show error, keep dialog open for retry
@@ -186,11 +185,10 @@ The agent provides default user-friendly error messages based on state and metho
 | State                   | Method     | Default Message                                                                        |
 | ----------------------- | ---------- | -------------------------------------------------------------------------------------- |
 | `MAX_RETRIES_EXCEEDED`  | `PASSWORD` | "You reached the maximum password authentication attempts. Please try another method." |
-| `MAX_RETRIES_EXCEEDED`  | `FIDO`     | "You reached the maximum security key attempts. Please try password authentication."   |
 | `AUTHENTICATION_FAILED` | `PASSWORD` | "Incorrect password. Please try again."                                                |
-| `AUTHENTICATION_FAILED` | `FIDO`     | "Security key authentication failed. Please try again."                                |
-| `FIDO_FAILED`           | `FIDO`     | "Security key authentication timed out or failed. Please enter your password."         |
 | `ERROR`                 | Any        | "An error occurred during authentication. Please try again."                           |
+
+**Note on FIDO:** FIDO authentication errors are handled by PAM. The agent displays whatever prompt or error PAM provides.
 
 **Custom Error Messages**
 QML can use default messages or override with custom text based on state/method combination.

@@ -22,7 +22,6 @@
 #include <QDebug>
 #include <QRegularExpression>
 #include <QFile>
-#include <QProcess>
 #include "logging.h"
 #include <QTimer>
 #include <unistd.h>

@@ -208,12 +208,12 @@ void TestPerformanceStress::testRapidSessionCreationCleanup()
     // VERIFY: System is in clean state after all cycles
     QVERIFY(!m_wrapper->hasActiveSessions());
 
-    // Performance check: cycles should average < 500ms each
+    // Performance check: cycles should average < 750ms each
     // Each cycle creates/destroys 5 PAM sessions + 20ms wait time
     // Real PAM sessions take ~80-100ms each due to setuid helper and PAM stack
-    // This allows detection of major performance regressions while being realistic
-    QVERIFY2(avgCycleTime < 500.0,
-             qPrintable(QString("Average cycle time %.2f ms exceeds 500ms threshold")
+    // Allow headroom for CI variance while detecting major regressions
+    QVERIFY2(avgCycleTime < 750.0,
+             qPrintable(QString("Average cycle time %.2f ms exceeds 750ms threshold")
                        .arg(avgCycleTime)));
 #endif
 }

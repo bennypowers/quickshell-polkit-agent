@@ -61,7 +61,9 @@ private:
 
 void TestAuthenticationStateIntegration::initTestCase()
 {
-    // Nothing needed for now - tests will use mocks
+    // Register enum types for QSignalSpy to work with queued signals
+    qRegisterMetaType<AuthenticationState>("AuthenticationState");
+    qRegisterMetaType<AuthenticationMethod>("AuthenticationMethod");
 }
 
 void TestAuthenticationStateIntegration::init()
