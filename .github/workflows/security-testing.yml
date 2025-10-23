@@ -34,12 +34,12 @@ jobs:
           cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
         "
 
-    - name: Run existing unit tests
+    - name: Build and run all unit tests
       run: |
         docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
           cd build-security &&
-          make test-message-validator test-security test-simple-integration &&
-          ctest --output-on-failure --tests-regex '(MessageValidator|SecurityManager|SimpleIntegration)'
+          make -j\$(nproc) &&
+          ctest --output-on-failure
         "
 
     - name: Run security fuzzing tests
