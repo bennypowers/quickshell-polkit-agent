@@ -233,8 +233,28 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
 
                     emit authorizationResult(gainedAuthorization, actionId);
 
-                    // Clean up session
-                    cleanupSession(cookie);
+                    // Clean up session only in these cases:
+                    // 1. Authentication succeeded
+                    // 2. Max retries exceeded
+                    // 3. We have an AsyncResult (real polkitd usage - it will call initiateAuth again for retry)
+                    SessionState *sessionState = getSession(cookie);
+                    bool shouldCleanup = gainedAuthorization ||
+                                        (sessionState && sessionState->state == AuthenticationState::MAX_RETRIES_EXCEEDED) ||
+                                        (sessionState && sessionState->result != nullptr);
+
+                    if (shouldCleanup) {
+                        cleanupSession(cookie);
+                    } else if (sessionState) {
+                        // Test harness mode: restart PAM session for retry
+                        qCDebug(polkitAgent) << "Restarting PAM session for retry (test harness mode)";
+
+                        // Transition back to WAITING_FOR_PASSWORD to allow retry
+                        setState(cookie, AuthenticationState::WAITING_FOR_PASSWORD);
+
+                        // NOTE: We keep the existing session and just call initiate() again
+                        // The session will reconnect and PAM will prompt for password again
+                        sessionState->session->initiate();
+                    }
                 });
 
         connect(pamSession, &PolkitQt1::Agent::Session::request,
@@ -266,6 +286,9 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
 
                         // Start FIDO timeout - if user doesn't tap within 15s, fallback to password
                         startFidoTimeout(cookie);
+
+                        // Transition to AUTHENTICATING before responding (same as password flow)
+                        setState(cookie, AuthenticationState::AUTHENTICATING);
 
                         // Auto-respond with empty string to let pam_u2f proceed with FIDO check
                         session->session->setResponse("");
