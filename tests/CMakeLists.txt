@@ -48,6 +48,22 @@ add_executable(test-localsocket-validation
 target_link_libraries(test-localsocket-validation Qt6::Test Qt6::Core Qt6::Network)
 add_test(NAME LocalSocketValidation COMMAND test-localsocket-validation)
 
+# Authentication state machine integration tests
+find_package(PolkitQt6-1 REQUIRED)
+add_executable(test-authentication-state-integration
+    test-authentication-state-integration.cpp
+    ../src/polkit-wrapper.cpp
+    ../src/logging.cpp
+)
+target_link_libraries(test-authentication-state-integration
+    Qt6::Test
+    Qt6::Core
+    Qt6::Network
+    PolkitQt6-1::Core
+    PolkitQt6-1::Agent
+)
+add_test(NAME AuthenticationStateIntegration COMMAND test-authentication-state-integration)
+
 # Add Python security tests
 find_program(PYTHON3_EXECUTABLE python3)
 if(PYTHON3_EXECUTABLE)
@@ -96,7 +112,7 @@ endif()
 # Add custom target to run all tests
 add_custom_target(run-tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test-message-validator test-security test-simple-integration test-localsocket-validation
+    DEPENDS test-message-validator test-security test-simple-integration test-localsocket-validation test-authentication-state-integration
     COMMENT "Running all tests"
 )
 
