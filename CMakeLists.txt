@@ -60,5 +60,6 @@ install(FILES packaging/systemd/quickshell-polkit-agent.service
 # Add tests subdirectory (optional)
 option(BUILD_TESTS "Build unit tests" OFF)
 if(BUILD_TESTS)
+    enable_testing()
     add_subdirectory(tests)
 endif()

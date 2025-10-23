@@ -1,7 +1,7 @@
 {
   "test_suite": "Security Test Suite",
-  "timestamp": "2025-09-01 20:27:40",
-  "duration_seconds": 24.16267156600952,
+  "timestamp": "2025-10-23 09:21:57",
+  "duration_seconds": 2.273413896560669,
   "summary": {
     "total_test_scripts": 6,
     "passed_scripts": 6,

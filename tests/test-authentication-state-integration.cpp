@@ -232,26 +232,43 @@ void TestAuthenticationStateIntegration::testFidoSuccessWithoutPasswordPrompt()
 void TestAuthenticationStateIntegration::testAuthenticationCancellation()
 {
     QSignalSpy resultSpy(m_wrapper, &PolkitWrapper::authorizationResult);
+    QSignalSpy stateChangeSpy(m_wrapper, &PolkitWrapper::authenticationStateChanged);
 
     QString testCookie = "test-cookie-cancel";
+    QString testActionId = "org.example.cancel-test";
 
-    // Step 1: Auth initiated
+    // VERIFY: Initial state is clean
+    QVERIFY(!m_wrapper->hasActiveSessions());
+
+    // Step 1: Trigger authentication
+    m_wrapper->testTriggerAuthentication(testActionId, "Test cancellation", "dialog-password", testCookie);
+    QTest::qWait(100);
+
+    // VERIFY: Session is active
+    QVERIFY(m_wrapper->hasActiveSessions());
+    QCOMPARE(m_wrapper->authenticationState(testCookie), AuthenticationState::INITIATED);
+
     // Step 2: User cancels
     m_wrapper->cancelAuthorization();
+    QTest::qWait(50);
 
     // VERIFY: Result emitted with authorized=false
-    // VERIFY: State is IDLE
-    // VERIFY: All session maps are empty
+    QVERIFY(resultSpy.count() > 0);
+    QCOMPARE(resultSpy.last().at(0).toBool(), false);
 
-    // Current implementation check:
-    // cancelAuthorization() calls:
-    // - session->cancel() for all activePolkitSessions
-    // - result->setError() for all activeSessions
-    // - clears m_nfcAttemptedSessions
+    // VERIFY: State transitioned to CANCELLED
+    bool foundCancelled = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        if (stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::CANCELLED) {
+            foundCancelled = true;
+            break;
+        }
+    }
+    QVERIFY2(foundCancelled, "Expected CANCELLED state transition");
 
-    // MISSING: State machine to verify clean state
-
-    QSKIP("Need state machine to verify clean cancellation");
+    // VERIFY: All sessions cleaned up
+    QVERIFY(!m_wrapper->hasActiveSessions());
+    QCOMPARE(m_wrapper->authenticationState(), AuthenticationState::IDLE);
 }
 
 /*
@@ -336,20 +353,40 @@ void TestAuthenticationStateIntegration::testMultipleWrongPasswordsMaxRetries()
  */
 void TestAuthenticationStateIntegration::testStateTransitionFromIdleToAuthenticating()
 {
-    // MISSING: authenticationStateChanged signal
-    // QSignalSpy stateChangeSpy(m_wrapper, &PolkitWrapper::authenticationStateChanged);
+    QSignalSpy stateChangeSpy(m_wrapper, &PolkitWrapper::authenticationStateChanged);
+    QSignalSpy dialogSpy(m_wrapper, &PolkitWrapper::showAuthDialog);
 
     // VERIFY: Initial state is IDLE
-    // QCOMPARE(m_wrapper->authenticationState(), AuthenticationState::IDLE);
+    QCOMPARE(m_wrapper->authenticationState(), AuthenticationState::IDLE);
+    QVERIFY(!m_wrapper->hasActiveSessions());
 
-    // Trigger authentication
+    QString testCookie = "test-cookie-state-transition";
+    QString testActionId = "org.example.test";
+
+    // Trigger authentication using test harness
+    m_wrapper->testTriggerAuthentication(testActionId, "Test authentication", "dialog-password", testCookie);
+
+    // Process events to allow async signals
+    QTest::qWait(100);
 
     // VERIFY: State changed to INITIATED
-    // QCOMPARE(stateChangeSpy.count(), 1);
-    // QCOMPARE(stateChangeSpy.at(0).at(0).value<AuthenticationState>(),
-    //          AuthenticationState::INITIATED);
+    QVERIFY(stateChangeSpy.count() > 0);
 
-    QSKIP("Need to implement authenticationState() getter and state change signal");
+    // First state change should be to INITIATED
+    QCOMPARE(stateChangeSpy.at(0).at(1).value<AuthenticationState>(),
+             AuthenticationState::INITIATED);
+
+    // VERIFY: Dialog was shown
+    QCOMPARE(dialogSpy.count(), 1);
+    QCOMPARE(dialogSpy.at(0).at(0).toString(), testActionId);
+
+    // VERIFY: Session is now active
+    QVERIFY(m_wrapper->hasActiveSessions());
+    QCOMPARE(m_wrapper->authenticationState(testCookie), AuthenticationState::INITIATED);
+
+    // Cleanup
+    m_wrapper->cancelAuthorization();
+    QTest::qWait(50);
 }
 
 /*
@@ -358,7 +395,7 @@ void TestAuthenticationStateIntegration::testStateTransitionFromIdleToAuthentica
 void TestAuthenticationStateIntegration::testStateTransitionToCompletedOnSuccess()
 {
     // Start auth → simulate success → verify state is COMPLETED → verify cleanup
-    QSKIP("Need state machine implementation");
+    QSKIP("Requires PAM success simulation - needs pam_wrapper with polkit-1 service config or mock Session");
 }
 
 /*
@@ -368,7 +405,7 @@ void TestAuthenticationStateIntegration::testStateTransitionToIdleOnError()
 {
     // Start auth → simulate error → verify state returns to IDLE
     // VERIFY: All session data cleaned up
-    QSKIP("Need state machine implementation");
+    QSKIP("Requires PAM error simulation - needs pam_wrapper with polkit-1 service config or mock Session");
 }
 
 /*
@@ -376,8 +413,38 @@ void TestAuthenticationStateIntegration::testStateTransitionToIdleOnError()
  */
 void TestAuthenticationStateIntegration::testStateTransitionOnCancellation()
 {
-    // Start auth → user cancels → verify state is CANCELLED then IDLE
-    QSKIP("Need state machine implementation");
+    QSignalSpy stateChangeSpy(m_wrapper, &PolkitWrapper::authenticationStateChanged);
+
+    QString testCookie = "test-cookie-state-cancel";
+    QString testActionId = "org.example.cancel-state-test";
+
+    // VERIFY: Initial state is IDLE
+    QCOMPARE(m_wrapper->authenticationState(), AuthenticationState::IDLE);
+
+    // Trigger authentication
+    m_wrapper->testTriggerAuthentication(testActionId, "Test state cancellation", "dialog-password", testCookie);
+    QTest::qWait(100);
+
+    // VERIFY: State is now INITIATED
+    QCOMPARE(m_wrapper->authenticationState(testCookie), AuthenticationState::INITIATED);
+
+    // User cancels
+    m_wrapper->cancelAuthorization();
+    QTest::qWait(50);
+
+    // VERIFY: State changed to CANCELLED
+    bool foundCancelled = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        if (stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::CANCELLED) {
+            foundCancelled = true;
+            break;
+        }
+    }
+    QVERIFY2(foundCancelled, "Expected state transition to CANCELLED");
+
+    // VERIFY: After cleanup, global state is IDLE
+    QCOMPARE(m_wrapper->authenticationState(), AuthenticationState::IDLE);
+    QVERIFY(!m_wrapper->hasActiveSessions());
 }
 
 /*
@@ -433,18 +500,52 @@ void TestAuthenticationStateIntegration::testConcurrentAuthenticationRequests()
 {
     QString cookie1 = "cookie-concurrent-1";
     QString cookie2 = "cookie-concurrent-2";
+    QString actionId1 = "org.example.concurrent-1";
+    QString actionId2 = "org.example.concurrent-2";
+
+    QSignalSpy stateChangeSpy(m_wrapper, &PolkitWrapper::authenticationStateChanged);
+
+    // VERIFY: Initially no sessions
+    QVERIFY(!m_wrapper->hasActiveSessions());
 
     // Simulate two simultaneous auth requests
+    m_wrapper->testTriggerAuthentication(actionId1, "First authentication", "dialog-password", cookie1);
+    QTest::qWait(50);
+    m_wrapper->testTriggerAuthentication(actionId2, "Second authentication", "dialog-password", cookie2);
+    QTest::qWait(50);
 
     // VERIFY: Two independent sessions created
+    QVERIFY(m_wrapper->hasActiveSessions());
+
     // VERIFY: Each has its own state
+    QCOMPARE(m_wrapper->authenticationState(cookie1), AuthenticationState::INITIATED);
+    QCOMPARE(m_wrapper->authenticationState(cookie2), AuthenticationState::INITIATED);
 
-    // Cancel first session
+    // VERIFY: State change signals include correct cookies
+    // Should have at least 2 state changes (one for each session)
+    QVERIFY(stateChangeSpy.count() >= 2);
 
-    // VERIFY: Second session unaffected
-    // VERIFY: Second session can still complete
+    // Verify both cookies got state changes
+    bool foundCookie1 = false;
+    bool foundCookie2 = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        QString cookie = stateChangeSpy.at(i).at(0).toString();
+        if (cookie == cookie1) foundCookie1 = true;
+        if (cookie == cookie2) foundCookie2 = true;
+    }
+    QVERIFY2(foundCookie1, "Expected state change for cookie1");
+    QVERIFY2(foundCookie2, "Expected state change for cookie2");
 
-    QSKIP("Need state machine with per-session state tracking");
+    // Cancel all sessions
+    // NOTE: Current API limitation - cancelAuthorization() cancels ALL sessions
+    // Individual session cancellation would require polkit daemon integration
+    m_wrapper->cancelAuthorization();
+    QTest::qWait(50);
+
+    // VERIFY: Both sessions cleaned up
+    QVERIFY(!m_wrapper->hasActiveSessions());
+    QCOMPARE(m_wrapper->authenticationState(cookie1), AuthenticationState::IDLE);
+    QCOMPARE(m_wrapper->authenticationState(cookie2), AuthenticationState::IDLE);
 }
 
 /*

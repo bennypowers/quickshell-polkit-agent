@@ -1,6 +1,6 @@
 {
   "test_type": "Permission Manipulation Security",
-  "timestamp": "2025-09-01 20:27:16",
+  "timestamp": "2025-10-23 09:21:57",
   "summary": {
     "total_tests": 8,
     "passed": 4,
@@ -12,7 +12,7 @@
   "results": [
     {
       "test": "Socket directory world-writable check",
-      "directory": "/tmp/quickshell_perm_test_zixaznjt",
+      "directory": "/tmp/quickshell_perm_test_ymoykjnw",
       "permissions": "777",
       "status": "FAIL",
       "description": "Directory should not be world-writable",
@@ -21,7 +21,7 @@
     },
     {
       "test": "Symlink to sensitive directory",
-      "symlink_path": "/tmp/quickshell_symlink_test_bdmakiak/malicious_socket",
+      "symlink_path": "/tmp/quickshell_symlink_test_q0rpsxmv/malicious_socket",
       "target": "/etc",
       "is_symlink": true,
       "status": "DETECTED",
@@ -30,18 +30,18 @@
     },
     {
       "test": "Directory traversal symlink",
-      "symlink_path": "/tmp/quickshell_symlink_test_bdmakiak/traversal",
+      "symlink_path": "/tmp/quickshell_symlink_test_q0rpsxmv/traversal",
       "target": "../../",
       "status": "DETECTED",
       "description": "Directory traversal attack via symlink"
     },
     {
       "test": "Socket file ownership and permissions",
-      "file_path": "/tmp/quickshell_ownership_test__6xtui8i/test_socket",
+      "file_path": "/tmp/quickshell_ownership_test_bz9isduy/test_socket",
       "permissions": "644",
-      "owner_uid": 1001,
-      "owner_gid": 118,
-      "current_uid": 1001,
+      "owner_uid": 1000,
+      "owner_gid": 1000,
+      "current_uid": 1000,
       "status": "PASS"
     },
     {

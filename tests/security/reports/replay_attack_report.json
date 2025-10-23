@@ -1,6 +1,6 @@
 {
   "test_type": "Replay Attack and Race Condition Security",
-  "timestamp": "2025-09-01 20:27:16",
+  "timestamp": "2025-10-23 09:21:58",
   "summary": {
     "total_tests": 25,
     "passed": 12,
@@ -12,16 +12,16 @@
     {
       "test": "Immediate cookie replay #1",
       "cookie": "auth_cookie_123456789",
-      "original_timestamp": 1756758436243,
-      "replay_timestamp": 1756758436243,
+      "original_timestamp": 1761200517783,
+      "replay_timestamp": 1761200517783,
       "time_diff_ms": 0,
       "status": "TESTED"
     },
     {
       "test": "Delayed cookie replay #1",
       "cookie": "auth_cookie_123456789",
-      "original_timestamp": 1756758436243,
-      "replay_timestamp": 1756758436343,
+      "original_timestamp": 1761200517783,
+      "replay_timestamp": 1761200517883,
       "time_diff_ms": 100,
       "hmac_matches": true,
       "status": "SHOULD_FAIL_HMAC",
@@ -30,7 +30,7 @@
     {
       "test": "Old timestamp cookie replay #1",
       "cookie": "auth_cookie_123456789",
-      "timestamp": 1756758376343,
+      "timestamp": 1761200457883,
       "age_seconds": 60,
       "status": "SHOULD_FAIL_TIMESTAMP",
       "expected_result": "Should fail due to old timestamp"
@@ -38,16 +38,16 @@
     {
       "test": "Immediate cookie replay #2",
       "cookie": "session_abc123def456",
-      "original_timestamp": 1756758436343,
-      "replay_timestamp": 1756758436343,
+      "original_timestamp": 1761200517883,
+      "replay_timestamp": 1761200517883,
       "time_diff_ms": 0,
       "status": "TESTED"
     },
     {
       "test": "Delayed cookie replay #2",
       "cookie": "session_abc123def456",
-      "original_timestamp": 1756758436343,
-      "replay_timestamp": 1756758436443,
+      "original_timestamp": 1761200517883,
+      "replay_timestamp": 1761200517983,
       "time_diff_ms": 100,
       "hmac_matches": true,
       "status": "SHOULD_FAIL_HMAC",
@@ -56,7 +56,7 @@
     {
       "test": "Old timestamp cookie replay #2",
       "cookie": "session_abc123def456",
-      "timestamp": 1756758376443,
+      "timestamp": 1761200457983,
       "age_seconds": 60,
       "status": "SHOULD_FAIL_TIMESTAMP",
       "expected_result": "Should fail due to old timestamp"
@@ -64,16 +64,16 @@
     {
       "test": "Immediate cookie replay #3",
       "cookie": "polkit_auth_token_xyz789",
-      "original_timestamp": 1756758436443,
-      "replay_timestamp": 1756758436443,
+      "original_timestamp": 1761200517983,
+      "replay_timestamp": 1761200517983,
       "time_diff_ms": 0,
       "status": "TESTED"
     },
     {
       "test": "Delayed cookie replay #3",
       "cookie": "polkit_auth_token_xyz789",
-      "original_timestamp": 1756758436443,
-      "replay_timestamp": 1756758436544,
+      "original_timestamp": 1761200517983,
+      "replay_timestamp": 1761200518084,
       "time_diff_ms": 101,
       "hmac_matches": true,
       "status": "SHOULD_FAIL_HMAC",
@@ -82,15 +82,15 @@
     {
       "test": "Old timestamp cookie replay #3",
       "cookie": "polkit_auth_token_xyz789",
-      "timestamp": 1756758376544,
+      "timestamp": 1761200458084,
       "age_seconds": 60,
       "status": "SHOULD_FAIL_TIMESTAMP",
       "expected_result": "Should fail due to old timestamp"
     },
     {
       "test": "Session expiry - Valid session",
-      "session_start_time": 1756758376544,
-      "current_time": 1756758436544,
+      "session_start_time": 1761200458084,
+      "current_time": 1761200518084,
       "session_age_ms": 60000,
       "session_age_minutes": 1,
       "timeout_ms": 300000,
@@ -100,8 +100,8 @@
     },
     {
       "test": "Session expiry - Expired session",
-      "session_start_time": 1756757836544,
-      "current_time": 1756758436544,
+      "session_start_time": 1761199918084,
+      "current_time": 1761200518084,
       "session_age_ms": 600000,
       "session_age_minutes": 10,
       "timeout_ms": 300000,
@@ -111,8 +111,8 @@
     },
     {
       "test": "Session expiry - Just expired session",
-      "session_start_time": 1756758130544,
-      "current_time": 1756758436544,
+      "session_start_time": 1761200212084,
+      "current_time": 1761200518084,
       "session_age_ms": 306000,
       "session_age_minutes": 5.1,
       "timeout_ms": 300000,
@@ -122,8 +122,8 @@
     },
     {
       "test": "Session expiry - Edge case session",
-      "session_start_time": 1756758136544,
-      "current_time": 1756758436544,
+      "session_start_time": 1761200218084,
+      "current_time": 1761200518084,
       "session_age_ms": 300000,
       "session_age_minutes": 5.0,
       "timeout_ms": 300000,
@@ -134,44 +134,44 @@
     {
       "test": "Concurrent authentication race condition",
       "num_threads": 5,
-      "total_time_seconds": 0.0496063232421875,
+      "total_time_seconds": 0.05121278762817383,
       "completed_authentications": 5,
       "error_authentications": 0,
       "same_cookie_used": "race_condition_test_cookie",
       "worker_results": [
         {
-          "worker_id": 3,
+          "worker_id": 2,
           "cookie": "race_condition_test_cookie",
-          "timestamp": 1756758436544,
-          "processing_time": 0.012153709141326723,
+          "timestamp": 1761200518085,
+          "processing_time": 0.020686080832728375,
           "status": "COMPLETED"
         },
         {
           "worker_id": 1,
           "cookie": "race_condition_test_cookie",
-          "timestamp": 1756758436544,
-          "processing_time": 0.017112385456107895,
+          "timestamp": 1761200518084,
+          "processing_time": 0.015464509029977078,
           "status": "COMPLETED"
         },
         {
           "worker_id": 4,
           "cookie": "race_condition_test_cookie",
-          "timestamp": 1756758436545,
-          "processing_time": 0.025721102619335676,
-          "status": "COMPLETED"
-        },
-        {
-          "worker_id": 2,
-          "cookie": "race_condition_test_cookie",
-          "timestamp": 1756758436544,
-          "processing_time": 0.02817167301807065,
+          "timestamp": 1761200518085,
+          "processing_time": 0.020941950502626466,
           "status": "COMPLETED"
         },
         {
           "worker_id": 0,
           "cookie": "race_condition_test_cookie",
-          "timestamp": 1756758436544,
-          "processing_time": 0.04663378846630926,
+          "timestamp": 1761200518084,
+          "processing_time": 0.03551652697498305,
+          "status": "COMPLETED"
+        },
+        {
+          "worker_id": 3,
+          "cookie": "race_condition_test_cookie",
+          "timestamp": 1761200518085,
+          "processing_time": 0.04080518863181808,
           "status": "COMPLETED"
         }
       ],
@@ -181,8 +181,8 @@
     },
     {
       "test": "Timestamp manipulation - Future timestamp",
-      "test_timestamp": 1756758496593,
-      "current_timestamp": 1756758436593,
+      "test_timestamp": 1761200578135,
+      "current_timestamp": 1761200518135,
       "time_diff_ms": 60000,
       "max_allowed_skew_ms": 30000,
       "should_reject": true,
@@ -191,8 +191,8 @@
     },
     {
       "test": "Timestamp manipulation - Far future timestamp",
-      "test_timestamp": 1756762036593,
-      "current_timestamp": 1756758436593,
+      "test_timestamp": 1761204118135,
+      "current_timestamp": 1761200518135,
       "time_diff_ms": 3600000,
       "max_allowed_skew_ms": 30000,
       "should_reject": true,
@@ -201,8 +201,8 @@
     },
     {
       "test": "Timestamp manipulation - Slightly future timestamp",
-      "test_timestamp": 1756758437593,
-      "current_timestamp": 1756758436593,
+      "test_timestamp": 1761200519135,
+      "current_timestamp": 1761200518135,
       "time_diff_ms": 1000,
       "max_allowed_skew_ms": 30000,
       "should_reject": false,
@@ -211,8 +211,8 @@
     },
     {
       "test": "Timestamp manipulation - Past timestamp",
-      "test_timestamp": 1756758376593,
-      "current_timestamp": 1756758436593,
+      "test_timestamp": 1761200458135,
+      "current_timestamp": 1761200518135,
       "time_diff_ms": -60000,
       "max_allowed_skew_ms": 30000,
       "should_reject": true,
@@ -221,8 +221,8 @@
     },
     {
       "test": "Timestamp manipulation - Far past timestamp",
-      "test_timestamp": 1756754836593,
-      "current_timestamp": 1756758436593,
+      "test_timestamp": 1761196918135,
+      "current_timestamp": 1761200518135,
       "time_diff_ms": -3600000,
       "max_allowed_skew_ms": 30000,
       "should_reject": true,
@@ -232,8 +232,8 @@
     {
       "test": "Timestamp manipulation - Zero timestamp",
       "test_timestamp": 0,
-      "current_timestamp": 1756758436593,
-      "time_diff_ms": -1756758436593,
+      "current_timestamp": 1761200518135,
+      "time_diff_ms": -1761200518135,
       "max_allowed_skew_ms": 30000,
       "should_reject": true,
       "expected_to_fail": true,
@@ -242,8 +242,8 @@
     {
       "test": "Timestamp manipulation - Negative timestamp",
       "test_timestamp": -1000,
-      "current_timestamp": 1756758436593,
-      "time_diff_ms": -1756758437593,
+      "current_timestamp": 1761200518135,
+      "time_diff_ms": -1761200519135,
       "max_allowed_skew_ms": 30000,
       "should_reject": true,
       "expected_to_fail": true,
@@ -252,8 +252,8 @@
     {
       "test": "Timestamp manipulation - Maximum timestamp",
       "test_timestamp": 9223372036854775807,
-      "current_timestamp": 1756758436593,
-      "time_diff_ms": 9223370280096339214,
+      "current_timestamp": 1761200518135,
+      "time_diff_ms": 9223370275654257672,
       "max_allowed_skew_ms": 30000,
       "should_reject": true,
       "expected_to_fail": true,
@@ -261,8 +261,8 @@
     },
     {
       "test": "Exact HMAC replay",
-      "original_hmac": "beb8ddf88b76d23c53207dec374ad745f240e3a886786b6638eca95f263cacfb",
-      "replay_hmac": "beb8ddf88b76d23c53207dec374ad745f240e3a886786b6638eca95f263cacfb",
+      "original_hmac": "fcb175993e4f54dd02447b5e8cee0ca3654eeb8ab7de16beb7a37a0ae32226d8",
+      "replay_hmac": "fcb175993e4f54dd02447b5e8cee0ca3654eeb8ab7de16beb7a37a0ae32226d8",
       "hmac_matches": true,
       "timestamp_matches": true,
       "status": "POTENTIAL_REPLAY",
@@ -270,17 +270,17 @@
     },
     {
       "test": "Modified message with original HMAC",
-      "original_hmac": "beb8ddf88b76d23c53207dec374ad745f240e3a886786b6638eca95f263cacfb",
-      "message_hmac": "beb8ddf88b76d23c53207dec374ad745f240e3a886786b6638eca95f263cacfb",
-      "expected_hmac": "e1e59a7e98205655fc8a3e347e259f8d2881ab5fb4651f695f12e8b67cc45bb1",
+      "original_hmac": "fcb175993e4f54dd02447b5e8cee0ca3654eeb8ab7de16beb7a37a0ae32226d8",
+      "message_hmac": "fcb175993e4f54dd02447b5e8cee0ca3654eeb8ab7de16beb7a37a0ae32226d8",
+      "expected_hmac": "442bb760d2d73c9943536d500869d64403b12d3d619602adaa6e4acc662c79eb",
       "hmac_verification_should_fail": true,
       "status": "SHOULD_FAIL_HMAC",
       "security_check": "HMAC verification must fail for modified messages"
     },
     {
       "test": "Message with wrong HMAC key",
-      "correct_hmac": "e1e59a7e98205655fc8a3e347e259f8d2881ab5fb4651f695f12e8b67cc45bb1",
-      "wrong_key_hmac": "33b172dd5d9a037589a67779b231cc3e3a9f5bb7f8dc9c8e0c428bbd47f800f9",
+      "correct_hmac": "442bb760d2d73c9943536d500869d64403b12d3d619602adaa6e4acc662c79eb",
+      "wrong_key_hmac": "424bb50781e176123ceff5d2f219b7acd42b4c58cb98aec645a71ab64f82168b",
       "hmacs_different": true,
       "status": "SHOULD_FAIL_HMAC",
       "security_check": "HMAC with wrong key must fail verification"

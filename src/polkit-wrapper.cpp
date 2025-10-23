@@ -628,6 +628,8 @@ void PolkitWrapper::cleanupSession(const QString &cookie)
 
     // Clean up PAM session
     if (session->session) {
+        // Disconnect all signals to prevent race conditions with queued signals
+        disconnect(session->session, nullptr, this, nullptr);
         session->session->cancel();
         session->session->deleteLater();
         session->session = nullptr;
