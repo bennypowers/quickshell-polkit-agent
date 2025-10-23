@@ -76,7 +76,15 @@ setup_test_environment() {
     # Start polkit daemon if not running
     if ! pgrep -x polkitd > /dev/null; then
         log_info "Starting polkitd..."
-        sudo /usr/libexec/polkitd --no-debug &
+        # Try both common locations for polkitd
+        if [ -x /usr/lib/polkit-1/polkitd ]; then
+            sudo /usr/lib/polkit-1/polkitd --no-debug &
+        elif [ -x /usr/libexec/polkitd ]; then
+            sudo /usr/libexec/polkitd --no-debug &
+        else
+            log_error "polkitd not found in /usr/lib/polkit-1 or /usr/libexec"
+            exit 1
+        fi
         sleep 2
         log_info "polkitd started"
     fi
