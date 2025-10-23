@@ -158,6 +158,11 @@ The tests gracefully skip when run locally (if polkit helper isn't properly conf
 - Tests run as root inside container (required for polkit daemon)
 - Authentication state integration tests only run in container (require setuid helper)
 - Some tests may require systemd cgroups v2
+- **Current Issue**: Agent startup in container requires system D-Bus which needs proper systemd init
+  - The container build works and compiles all tests
+  - Local unit tests (92% pass) verify functionality
+  - Full E2E testing requires a more complex container setup with systemd as PID 1
+  - Tracked for future improvement
 
 ## Future Improvements
 
