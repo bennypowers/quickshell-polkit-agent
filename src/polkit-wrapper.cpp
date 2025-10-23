@@ -185,40 +185,51 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
                     qCDebug(polkitAgent) << "Polkit session completed, authorized:" << gainedAuthorization;
                     qCDebug(polkitSensitive) << "Session cookie:" << cookie;
 
-                    // Update state
+                    // Get session once and reuse to avoid use-after-free
+                    SessionState *session = getSession(cookie);
+                    if (!session) {
+                        qCWarning(polkitAgent) << "Session not found in completed handler for cookie:" << cookie;
+                        return;
+                    }
+
+                    // Update state and handle retry logic
                     if (gainedAuthorization) {
                         setState(cookie, AuthenticationState::COMPLETED);
                     } else {
-                        SessionState *session = getSession(cookie);
-                        if (session) {
-                            session->retryCount++;
-                            qCDebug(polkitAgent) << "Authentication failed, retry count:" << session->retryCount
-                                                 << "/" << MAX_AUTH_RETRIES;
+                        session->retryCount++;
+                        qCDebug(polkitAgent) << "Authentication failed, retry count:" << session->retryCount
+                                             << "/" << MAX_AUTH_RETRIES;
 
-                            if (session->retryCount >= MAX_AUTH_RETRIES) {
-                                qCWarning(polkitAgent) << "Maximum authentication attempts reached for" << cookie;
-                                setState(cookie, AuthenticationState::MAX_RETRIES_EXCEEDED);
+                        if (session->retryCount >= MAX_AUTH_RETRIES) {
+                            qCWarning(polkitAgent) << "Maximum authentication attempts reached for" << cookie;
+                            setState(cookie, AuthenticationState::MAX_RETRIES_EXCEEDED);
 
-                                // Emit error with default message
-                                QString defaultMsg = getDefaultErrorMessage(AuthenticationState::MAX_RETRIES_EXCEEDED, session->method);
-                                emit authenticationError(cookie, AuthenticationState::MAX_RETRIES_EXCEEDED,
-                                                        session->method, defaultMsg,
-                                                        QString("Retry count: %1/%2").arg(session->retryCount).arg(MAX_AUTH_RETRIES));
-                            } else {
-                                setState(cookie, AuthenticationState::AUTHENTICATION_FAILED);
+                            // Emit error with default message
+                            QString defaultMsg = getDefaultErrorMessage(AuthenticationState::MAX_RETRIES_EXCEEDED, session->method);
+                            emit authenticationError(cookie, AuthenticationState::MAX_RETRIES_EXCEEDED,
+                                                    session->method, defaultMsg,
+                                                    QString("Retry count: %1/%2").arg(session->retryCount).arg(MAX_AUTH_RETRIES));
+                        } else {
+                            setState(cookie, AuthenticationState::AUTHENTICATION_FAILED);
 
-                                // Emit error with default message
-                                QString defaultMsg = getDefaultErrorMessage(AuthenticationState::AUTHENTICATION_FAILED, session->method);
-                                emit authenticationError(cookie, AuthenticationState::AUTHENTICATION_FAILED,
-                                                        session->method, defaultMsg,
-                                                        QString("Retry count: %1/%2").arg(session->retryCount).arg(MAX_AUTH_RETRIES));
-                            }
+                            // Emit error with default message
+                            QString defaultMsg = getDefaultErrorMessage(AuthenticationState::AUTHENTICATION_FAILED, session->method);
+                            emit authenticationError(cookie, AuthenticationState::AUTHENTICATION_FAILED,
+                                                    session->method, defaultMsg,
+                                                    QString("Retry count: %1/%2").arg(session->retryCount).arg(MAX_AUTH_RETRIES));
                         }
                     }
 
+                    // Determine cleanup strategy before completing AsyncResult
+                    // (completing result may trigger polkit cleanup)
+                    bool hasAsyncResult = (session->result != nullptr);
+                    bool shouldCleanup = gainedAuthorization ||
+                                        session->state == AuthenticationState::MAX_RETRIES_EXCEEDED ||
+                                        hasAsyncResult;
+
                     // Complete the AsyncResult for polkit daemon
-                    SessionState *session = getSession(cookie);
-                    if (session && session->result) {
+                    // IMPORTANT: Do this AFTER determining cleanup strategy but BEFORE cleanup
+                    if (session->result) {
                         if (gainedAuthorization) {
                             session->result->setCompleted();
                         } else {
@@ -229,18 +240,10 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
 
                     emit authorizationResult(gainedAuthorization, actionId);
 
-                    // Clean up session only in these cases:
-                    // 1. Authentication succeeded
-                    // 2. Max retries exceeded
-                    // 3. We have an AsyncResult (real polkitd usage - it will call initiateAuth again for retry)
-                    SessionState *sessionState = getSession(cookie);
-                    bool shouldCleanup = gainedAuthorization ||
-                                        (sessionState && sessionState->state == AuthenticationState::MAX_RETRIES_EXCEEDED) ||
-                                        (sessionState && sessionState->result != nullptr);
-
+                    // Clean up or restart session
                     if (shouldCleanup) {
                         cleanupSession(cookie);
-                    } else if (sessionState) {
+                    } else {
                         // Test harness mode: restart PAM session for retry
                         qCDebug(polkitAgent) << "Restarting PAM session for retry (test harness mode)";
 
@@ -249,7 +252,9 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
 
                         // NOTE: We keep the existing session and just call initiate() again
                         // The session will reconnect and PAM will prompt for password again
-                        sessionState->session->initiate();
+                        if (session->session) {
+                            session->session->initiate();
+                        }
                     }
                 });
 
