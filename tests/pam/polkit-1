@@ -1,0 +1,24 @@
+#%PAM-1.0
+# PAM configuration for polkit-1 service (used by PolkitQt1::Agent::Session)
+#
+# This configuration is used by pam_wrapper for testing authentication flows
+# without affecting the system PAM configuration.
+#
+# For testing with pam_wrapper:
+#   export PAM_WRAPPER=1
+#   export PAM_WRAPPER_SERVICE_DIR=/path/to/tests/pam
+#   export LD_PRELOAD=/path/to/libpam_wrapper.so
+
+# Authentication phase - test with pam_permit (always succeeds)
+# In real system, this would be pam_unix.so for password auth
+# For FIDO testing, would be pam_u2f.so
+auth        required      pam_permit.so
+
+# Account management - check if account is valid
+account     required      pam_permit.so
+
+# Password management - not used for polkit auth
+password    required      pam_permit.so
+
+# Session management - not used for polkit auth
+session     required      pam_permit.so
