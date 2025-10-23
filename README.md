@@ -86,14 +86,114 @@ ShellRoot {
 
 Once installed and configured, custom authentication dialogs will automatically appear for any polkit-enabled application (e.g., `pkexec ls`).
 
-### API Signals
+### API Reference
 
-**Key signals from PolkitAgent:**
-- `showAuthDialog(actionId, message, iconName, cookie)` - Authentication required
-- `authorizationResult(authorized, actionId)` - Result received  
-- `authorizationError(error)` - Error occurred
-- `connected()` - Connected to agent
-- `disconnected()` - Disconnected from agent
+#### Core Signals
+
+**Authentication Flow:**
+- `showAuthDialog(actionId, message, iconName, cookie)` - Authentication required, show UI
+- `showPasswordRequest(actionId, request, echo, cookie)` - Password needed (FIDO fallback)
+- `authorizationResult(authorized, actionId)` - Final result received
+- `authorizationError(error)` - Simple error message (deprecated, don't use)
+
+**Connection Status:**
+- `connected()` - Connected to agent backend
+- `disconnected()` - Disconnected from agent backend
+
+#### State Machine Signals (New)
+
+**State Tracking:**
+- `authenticationStateChanged(cookie, AuthenticationState)` - Session state transition
+- `authenticationMethodChanged(cookie, AuthenticationMethod)` - Auth method changed
+- `authenticationMethodFailed(cookie, method, reason)` - Method failed (e.g., FIDO timeout)
+
+**Comprehensive Error Handling:**
+```qml
+onAuthenticationError: function(cookie, state, method, defaultMessage, technicalDetails) {
+    // state: AuthenticationState enum
+    // method: AuthenticationMethod enum
+    // defaultMessage: User-friendly message from C++
+    // technicalDetails: Technical error info
+
+    // Option 1: Use default message
+    showError(defaultMessage)
+
+    // Option 2: Custom message based on state
+    if (state === AuthenticationState.MAX_RETRIES_EXCEEDED) {
+        showError("Too many attempts! Take a break.")
+    } else {
+        showError(defaultMessage)
+    }
+}
+```
+
+#### Authentication States
+
+```qml
+enum AuthenticationState {
+    IDLE,                     // No authentication in progress
+    INITIATED,                // Request received, session created
+    TRYING_FIDO,              // Auto-attempting FIDO/U2F
+    FIDO_FAILED,              // FIDO failed, preparing fallback
+    WAITING_FOR_PASSWORD,     // Password prompt shown
+    AUTHENTICATING,           // PAM processing credentials
+    AUTHENTICATION_FAILED,    // Failed (recoverable - can retry)
+    MAX_RETRIES_EXCEEDED,     // Too many attempts (terminal)
+    COMPLETED,                // Authentication succeeded
+    CANCELLED,                // User cancelled
+    ERROR                     // Unrecoverable error
+}
+```
+
+##### UI State Mapping
+- `TRYING_FIDO` → Show "Waiting for security key..." with spinner
+- `WAITING_FOR_PASSWORD` → Show password input field
+- `AUTHENTICATING` → Show "Checking credentials..." with spinner
+- `AUTHENTICATION_FAILED` → Show error, keep dialog open for retry
+- `MAX_RETRIES_EXCEEDED` → Show error, close dialog (no retry)
+
+#### Authentication Methods
+
+```qml
+enum AuthenticationMethod {
+    NONE,      // No method selected yet
+    FIDO,      // FIDO/U2F/NFC security key
+    PASSWORD   // Password authentication
+}
+```
+
+#### State Inspection Methods
+
+```qml
+// Check current state for a session
+polkitAgent.authenticationState(cookie)  // Returns AuthenticationState
+polkitAgent.authenticationState()        // Global state (first active session)
+
+// Check authentication method
+polkitAgent.authenticationMethod(cookie) // Returns AuthenticationMethod
+
+// Check if any sessions active
+polkitAgent.hasActiveSessions()          // Returns bool
+
+// Check retry count
+polkitAgent.sessionRetryCount(cookie)    // Returns int (0-3)
+```
+
+#### Error Messages
+
+The agent provides default user-friendly error messages based on state and method:
+
+| State                   | Method     | Default Message                                                                        |
+| ----------------------- | ---------- | -------------------------------------------------------------------------------------- |
+| `MAX_RETRIES_EXCEEDED`  | `PASSWORD` | "You reached the maximum password authentication attempts. Please try another method." |
+| `MAX_RETRIES_EXCEEDED`  | `FIDO`     | "You reached the maximum security key attempts. Please try password authentication."   |
+| `AUTHENTICATION_FAILED` | `PASSWORD` | "Incorrect password. Please try again."                                                |
+| `AUTHENTICATION_FAILED` | `FIDO`     | "Security key authentication failed. Please try again."                                |
+| `FIDO_FAILED`           | `FIDO`     | "Security key authentication timed out or failed. Please enter your password."         |
+| `ERROR`                 | Any        | "An error occurred during authentication. Please try again."                           |
+
+**Custom Error Messages**
+QML can use default messages or override with custom text based on state/method combination.
 
 ## Configuration
 
@@ -129,7 +229,30 @@ cmake -DCMAKE_BUILD_TYPE=Debug ..
 make
 ```
 
-### Testing & Troubleshooting
+### Testing
+
+**Run all tests:**
+```bash
+mkdir build && cd build
+cmake .. -DBUILD_TESTS=ON
+make -j$(nproc)
+ctest --output-on-failure
+```
+
+**Test suites:**
+- **Unit Tests** (12 tests) - MessageValidator, SecurityManager, LocalSocket, etc.
+- **Integration Tests** - Authentication state machine with 4 passing, 13 skipped (need PAM)
+- **Security Tests** (7 Python tests) - Fuzzing, permissions, replay attacks, rate limiting
+- **E2E Tests** (Podman) - Real polkit daemon integration
+
+**Run specific test suites:**
+```bash
+make run-tests              # All C++ tests
+make run-security-tests     # Python security tests only
+make run-e2e-tests         # Podman E2E tests only
+```
+
+### Troubleshooting
 ```bash
 # Test authentication
 pkexec echo "test"
@@ -141,6 +264,9 @@ journalctl --user -u quickshell-polkit-agent.service -f
 # Debug socket issues
 ls -la /run/user/$(id -u)/quickshell-polkit
 journalctl --user -f | grep quickshell
+
+# Enable debug logging
+export QT_LOGGING_RULES="polkit.agent.debug=true;polkit.sensitive.debug=false"
 ```
 
 ### Project Structure
@@ -149,8 +275,17 @@ journalctl --user -f | grep quickshell
 quickshell-polkit-agent/
 ├── src/                          # C++ source code
 │   ├── main.cpp                  # Main application entry point
-│   ├── polkit-wrapper.{cpp,h}    # PolkitQt1 wrapper
-│   └── ipc-server.{cpp,h}        # Unix socket IPC server
+│   ├── polkit-wrapper.{cpp,h}    # PolkitQt1 wrapper with state machine
+│   ├── ipc-server.{cpp,h}        # Unix socket IPC server
+│   ├── security.{cpp,h}          # Security validation
+│   ├── message-validator.{cpp,h} # Message validation
+│   └── logging.{cpp,h}           # Logging categories
+├── tests/                        # Test suite
+│   ├── test-authentication-state-integration.cpp  # State machine tests
+│   ├── test-localsocket-validation.cpp            # IPC tests
+│   ├── security/                 # Python security tests
+│   ├── e2e/                      # Podman E2E tests
+│   └── pam/                      # PAM wrapper configs
 ├── quickshell/                   # Quickshell components
 │   └── PolkitAgent.qml          # Main polkit component
 ├── examples/                     # Example implementations
