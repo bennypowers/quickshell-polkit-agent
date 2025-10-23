@@ -12,6 +12,7 @@ RUN dnf install -y \
     polkit-qt6-1-devel \
     polkit \
     pam-devel \
+    pam_wrapper \
     dbus-daemon \
     dbus-x11 \
     python3 \

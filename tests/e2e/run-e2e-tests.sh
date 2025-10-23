@@ -270,6 +270,51 @@ test_fido_failure() {
     return 0
 }
 
+# Test: Authentication state integration tests
+test_authentication_state_integration() {
+    log_info "TEST: Authentication state integration"
+
+    TEST_BIN="$BUILD_DIR/tests/test-authentication-state-integration"
+
+    if [ ! -f "$TEST_BIN" ]; then
+        log_error "Authentication state test binary not found: $TEST_BIN"
+        test_failed "Authentication state integration tests - binary not found"
+        return 1
+    fi
+
+    # Set up PAM wrapper environment for testing
+    export PAM_WRAPPER=1
+    export PAM_WRAPPER_SERVICE_DIR="$WORKSPACE/tests/pam"
+
+    # Find pam_wrapper library
+    PAM_WRAPPER_LIB=$(find /usr/lib64 /usr/lib -name "libpam_wrapper.so" 2>/dev/null | head -n1)
+    if [ -z "$PAM_WRAPPER_LIB" ]; then
+        log_warn "pam_wrapper library not found - tests may use system PAM"
+    else
+        export LD_PRELOAD="$PAM_WRAPPER_LIB"
+        log_info "Using PAM wrapper: $PAM_WRAPPER_LIB"
+    fi
+
+    # Ensure pam_fido_mock.so is in the PAM service directory
+    if [ -f "$BUILD_DIR/tests/pam/pam_fido_mock.so" ]; then
+        cp "$BUILD_DIR/tests/pam/pam_fido_mock.so" "$WORKSPACE/tests/pam/pam_fido_mock.so"
+        log_info "Copied pam_fido_mock.so to PAM service directory"
+    fi
+
+    # Run the authentication state integration tests
+    log_info "Running authentication state integration tests..."
+
+    if "$TEST_BIN" -v1 > "$TEST_RESULTS_DIR/auth-state-integration.log" 2>&1; then
+        test_passed "Authentication state integration tests"
+        return 0
+    else
+        log_error "Authentication state tests failed - see log:"
+        cat "$TEST_RESULTS_DIR/auth-state-integration.log"
+        test_failed "Authentication state integration tests"
+        return 1
+    fi
+}
+
 # Cleanup on exit
 cleanup() {
     log_info "Cleaning up..."
@@ -320,6 +365,11 @@ main() {
     test_fido_success
     test_fido_timeout
     test_fido_failure
+
+    # Authentication state integration tests (container-only)
+    # These tests require polkit-agent-helper-1 to be setuid root
+    # and full PAM/polkit/D-Bus integration
+    test_authentication_state_integration
 
     log_info "All tests completed"
 }

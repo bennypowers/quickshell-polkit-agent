@@ -22,14 +22,37 @@ This directory contains unit tests for security-critical components of quickshel
 - **Security integration**: Tests HMAC signing/verification with message validation
 - **Socket communication**: Tests basic Unix socket communication and message exchange
 
+### Authentication State Integration Tests (`test-authentication-state-integration.cpp`)
+**Note: These tests run ONLY in the E2E container environment** (see `tests/e2e/README.md`)
+
+- **Normal password authentication**: End-user password flow with PAM
+- **FIDO authentication flows**: Auto-attempt, timeout, fallback to password
+- **Authentication cancellation**: User cancels authentication mid-flow
+- **Wrong password retry**: Retry logic and max retries enforcement
+- **State machine transitions**: All authentication state transitions
+- **Session lifecycle**: Session creation, cleanup, error recovery
+- **Concurrent authentication**: Multiple simultaneous sessions
+- **FIDO/Password race conditions**: User submits password while FIDO in progress
+
+These tests require:
+- `polkit-agent-helper-1` setuid root (security risk locally)
+- PAM wrapper for mocking authentication
+- `pam_fido_mock.so` for simulating FIDO devices
+
+**Run via:** `./tests/e2e/run-podman-e2e.sh` (container environment only)
+
 ## Running Tests
 
-### Method 1: Using the test runner script
+### Local Unit Tests (CTest)
+
+These tests run locally and are safe to execute on developer machines:
+
+#### Method 1: Using the test runner script
 ```bash
 ./run-tests.sh
 ```
 
-### Method 2: Manual build and run
+#### Method 2: Manual build and run
 ```bash
 mkdir build-tests && cd build-tests
 cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
@@ -37,13 +60,26 @@ make
 ctest --output-on-failure
 ```
 
-### Method 3: Individual test execution
+#### Method 3: Individual test execution
 ```bash
 cd build-tests/tests
 ./test-message-validator
 ./test-security
 ./test-simple-integration
 ```
+
+**Note:** The authentication state integration tests are intentionally excluded from CTest. They require privileged operations and run only in the E2E container environment.
+
+### Container-Only Tests (E2E)
+
+For full integration testing including authentication flows:
+
+```bash
+# Run all tests in isolated container environment
+./tests/e2e/run-podman-e2e.sh
+```
+
+See `tests/e2e/README.md` for details on container-only tests.
 
 ## Test Requirements
 

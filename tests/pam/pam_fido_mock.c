@@ -37,6 +37,11 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags,
     const char *mode = getenv("FIDO_TEST_MODE");
     const char *delay_str = getenv("FIDO_TEST_DELAY");
     int delay_ms = delay_str ? atoi(delay_str) : 1000;
+    struct pam_conv *conv;
+    struct pam_message msg;
+    const struct pam_message *msgp = &msg;
+    struct pam_response *resp = NULL;
+    int retval;
 
     pam_syslog(pamh, LOG_INFO, "pam_fido_mock: Starting FIDO authentication simulation");
     pam_syslog(pamh, LOG_INFO, "pam_fido_mock: Mode=%s, Delay=%dms",
@@ -45,6 +50,34 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags,
     /* Default mode: quick failure (FIDO not available) */
     if (!mode || strlen(mode) == 0) {
         mode = "fail";
+    }
+
+    /* Get the conversation function to trigger PolkitWrapper::request() */
+    retval = pam_get_item(pamh, PAM_CONV, (const void **)&conv);
+    if (retval != PAM_SUCCESS || !conv || !conv->conv) {
+        pam_syslog(pamh, LOG_ERR, "pam_fido_mock: Failed to get conversation function");
+        return PAM_SYSTEM_ERR;
+    }
+
+    /* Send a prompt to trigger the agent's request() handler */
+    msg.msg_style = PAM_PROMPT_ECHO_OFF;
+    msg.msg = "FIDO/U2F authentication (tap security key):";
+
+    pam_syslog(pamh, LOG_INFO, "pam_fido_mock: Calling conversation function to trigger request()");
+    retval = conv->conv(1, &msgp, &resp, conv->appdata_ptr);
+
+    if (retval != PAM_SUCCESS) {
+        pam_syslog(pamh, LOG_INFO, "pam_fido_mock: Conversation failed: %d", retval);
+        return PAM_AUTH_ERR;
+    }
+
+    /* Free the response if provided */
+    if (resp) {
+        if (resp->resp) {
+            memset(resp->resp, 0, strlen(resp->resp));
+            free(resp->resp);
+        }
+        free(resp);
     }
 
     if (strcmp(mode, "success") == 0) {

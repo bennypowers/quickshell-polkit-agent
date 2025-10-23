@@ -21,6 +21,14 @@ The E2E tests verify:
 3. **Denied Actions** - Actions configured to deny are properly rejected
 4. **Concurrent Requests** - Multiple simultaneous authorization requests are handled
 5. **Session Cleanup** - Agent properly cleans up sessions after completion
+6. **Authentication State Integration** - Container-only tests for authentication flows:
+   - Normal password authentication
+   - FIDO/U2F authentication attempts and fallback
+   - Authentication cancellation
+   - Wrong password retry and max retries
+   - State machine transitions
+   - Session lifecycle management
+   - Error recovery scenarios
 
 ## Running E2E Tests
 
@@ -109,18 +117,46 @@ pkcheck --action-id org.quickshell.polkit.test.allow --process $$
 
 The E2E tests can be integrated into CI workflows. See `.github/workflows/security-testing.yml` for an example.
 
+## Container-Only Tests
+
+Some tests are designed to run **only** in the E2E container environment, not locally via CTest:
+
+### Authentication State Integration Tests
+
+The `test-authentication-state-integration` binary contains comprehensive tests for authentication flows. These tests require:
+
+1. **polkit-agent-helper-1 setuid root** - The polkit helper must be setuid to interact with PAM
+2. **PAM wrapper** - Uses `pam_wrapper` to mock PAM authentication without affecting the host
+3. **Mock FIDO module** - `pam_fido_mock.so` simulates FIDO/U2F devices for testing
+
+**Why container-only?**
+- Setting polkit-agent-helper-1 as setuid root locally is a security risk
+- PAM configuration changes could interfere with system authentication
+- The container provides isolated PAM and polkit environments
+
+**Running these tests:**
+```bash
+# Tests run automatically as part of E2E suite
+./tests/e2e/run-podman-e2e.sh
+
+# Or manually in container
+podman run -it --privileged --systemd=always quickshell-polkit-e2e /bin/bash
+cd /workspace/build/tests
+PAM_WRAPPER=1 PAM_WRAPPER_SERVICE_DIR=/workspace/tests/pam \
+  LD_PRELOAD=/usr/lib64/libpam_wrapper.so \
+  ./test-authentication-state-integration -v1
+```
+
+The tests gracefully skip when run locally (if polkit helper isn't properly configured) with a message indicating they should be run in the E2E container.
+
 ## Known Limitations
 
 - Tests run as root inside container (required for polkit daemon)
-- Password authentication flows are difficult to test in headless environment
-- FIDO/U2F authentication cannot be tested without real hardware
+- Authentication state integration tests only run in container (require setuid helper)
 - Some tests may require systemd cgroups v2
 
 ## Future Improvements
 
-- [ ] Add tests for password authentication with expect/pexpect
-- [ ] Test error recovery scenarios
 - [ ] Test agent restart/recovery
-- [ ] Test with multiple concurrent sessions
-- [ ] Add performance/stress tests
-- [ ] Test FIDO authentication with virtual U2F device
+- [ ] Add performance/stress tests in container environment
+- [ ] Test with additional PAM module configurations

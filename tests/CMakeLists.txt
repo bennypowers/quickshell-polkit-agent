@@ -68,8 +68,11 @@ target_link_libraries(test-authentication-state-integration
     PolkitQt6-1::Agent
 )
 
-# Add the test first
-add_test(NAME AuthenticationStateIntegration COMMAND test-authentication-state-integration)
+# NOTE: AuthenticationStateIntegration is run in E2E container environment only
+# It requires polkit-agent-helper-1 to be setuid root, which is not safe for local development
+# The test binary is still built (for use in E2E), but not registered with CTest
+# Run via: ./tests/e2e/run-podman-e2e.sh
+# add_test(NAME AuthenticationStateIntegration COMMAND test-authentication-state-integration)
 
 # Performance and stress tests
 add_executable(test-performance-stress
@@ -100,8 +103,18 @@ if(PAM_WRAPPER_LIBRARY)
     # Set up environment for PAM mocking
     set(PAM_WRAPPER_SERVICE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pam")
 
+    # Copy pam_fido_mock.so to service directory so PAM can find it
+    if(TARGET pam_fido_mock)
+        add_custom_command(TARGET test-authentication-state-integration POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy
+                $<TARGET_FILE:pam_fido_mock>
+                ${PAM_WRAPPER_SERVICE_DIR}/pam_fido_mock.so
+            COMMENT "Copying pam_fido_mock.so to PAM service directory"
+        )
+    endif()
+
     set_tests_properties(AuthenticationStateIntegration PROPERTIES
-        ENVIRONMENT "PAM_WRAPPER=1;PAM_WRAPPER_SERVICE_DIR=${PAM_WRAPPER_SERVICE_DIR};LD_PRELOAD=${PAM_WRAPPER_LIBRARY}"
+        ENVIRONMENT "PAM_WRAPPER=1;PAM_WRAPPER_SERVICE_DIR=${PAM_WRAPPER_SERVICE_DIR};LD_PRELOAD=${PAM_WRAPPER_LIBRARY};LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/pam:$ENV{LD_LIBRARY_PATH}"
     )
 
     message(STATUS "PAM wrapper enabled for AuthenticationStateIntegration test")

@@ -27,6 +27,9 @@ test-*.py
 *.log
 Testing/
 
+# PAM test modules (built artifacts)
+tests/pam/*.so
+
 # E2E test artifacts
 tests/e2e/test-results/
 tests/e2e/*.log
