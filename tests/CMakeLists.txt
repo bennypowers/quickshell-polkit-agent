@@ -95,7 +95,9 @@ target_link_libraries(test-performance-stress
 
 add_test(NAME PerformanceStress COMMAND test-performance-stress)
 
-# Configure test with pam_wrapper if available
+# Configure PAM mock build
+# Note: AuthenticationStateIntegration test is container-only (not in CTest)
+# PAM wrapper configuration is handled by E2E runner script
 find_library(PAM_WRAPPER_LIBRARY NAMES pam_wrapper)
 if(PAM_WRAPPER_LIBRARY)
     message(STATUS "Found pam_wrapper: ${PAM_WRAPPER_LIBRARY}")
@@ -113,14 +115,10 @@ if(PAM_WRAPPER_LIBRARY)
         )
     endif()
 
-    set_tests_properties(AuthenticationStateIntegration PROPERTIES
-        ENVIRONMENT "PAM_WRAPPER=1;PAM_WRAPPER_SERVICE_DIR=${PAM_WRAPPER_SERVICE_DIR};LD_PRELOAD=${PAM_WRAPPER_LIBRARY};LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/pam:$ENV{LD_LIBRARY_PATH}"
-    )
-
-    message(STATUS "PAM wrapper enabled for AuthenticationStateIntegration test")
+    message(STATUS "PAM wrapper available for E2E container tests")
     message(STATUS "  Service dir: ${PAM_WRAPPER_SERVICE_DIR}")
 else()
-    message(WARNING "pam_wrapper not found - some tests will be skipped")
+    message(WARNING "pam_wrapper not found - E2E auth tests will be skipped")
     message(WARNING "  Install with: sudo dnf install pam_wrapper (Fedora)")
     message(WARNING "            or: sudo apt install libpam-wrapper (Debian/Ubuntu)")
 endif()
