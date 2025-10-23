@@ -25,8 +25,10 @@ bool UsbNfcDetector::isPresent()
     QProcess lsusb;
     lsusb.start("lsusb");
 
-    if (!lsusb.waitForFinished(1000)) {
-        qCWarning(polkitAgent) << "lsusb command timed out";
+    // Short timeout - if lsusb takes >100ms, USB subsystem likely has issues
+    if (!lsusb.waitForFinished(100)) {
+        qCDebug(polkitAgent) << "lsusb command timed out or not available";
+        lsusb.kill();
         return false;
     }
 
