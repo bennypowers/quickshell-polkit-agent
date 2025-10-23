@@ -22,22 +22,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Install Podman
       run: |
         sudo apt-get update
-        sudo apt-get install -y \
-          cmake \
-          qt6-base-dev \
-          libpolkit-qt6-1-dev \
-          pkg-config
+        sudo apt-get install -y podman
+
+    - name: Build container
+      run: |
+        podman build -f Containerfile -t quickshell-polkit-test .
 
     - name: Build and run unit tests
       run: |
-        mkdir -p build
-        cd build
-        cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
-        make -j"$(nproc)"
-        make test
+        podman run --rm -v "$PWD:/workspace:Z" quickshell-polkit-test bash -c "
+          mkdir -p build
+          cd build
+          cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+          make -j\$(nproc)
+          ctest --output-on-failure
+        "
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
@@ -102,10 +104,7 @@ jobs:
     - name: Build and run all tests in container
       id: container_tests
       run: |
-        mkdir -p build
-        cd build
-        cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
-        make test-container
+        ./tests/e2e/run-podman-e2e.sh
 
     - name: Upload test results
       uses: actions/upload-artifact@v4
