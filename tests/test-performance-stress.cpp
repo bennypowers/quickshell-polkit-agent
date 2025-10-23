@@ -45,7 +45,8 @@ private:
 
 void TestPerformanceStress::initTestCase()
 {
-    m_wrapper = new PolkitWrapper();
+    // Use default UsbNfcDetector (nullptr = default)
+    m_wrapper = new PolkitWrapper(nullptr, nullptr);
     QVERIFY(m_wrapper != nullptr);
 }
 

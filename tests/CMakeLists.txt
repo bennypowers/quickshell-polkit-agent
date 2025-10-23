@@ -53,6 +53,7 @@ find_package(PolkitQt6-1 REQUIRED)
 add_executable(test-authentication-state-integration
     test-authentication-state-integration.cpp
     ../src/polkit-wrapper.cpp
+    ../src/nfc-detector.cpp
     ../src/logging.cpp
 )
 
@@ -74,6 +75,7 @@ add_test(NAME AuthenticationStateIntegration COMMAND test-authentication-state-i
 add_executable(test-performance-stress
     test-performance-stress.cpp
     ../src/polkit-wrapper.cpp
+    ../src/nfc-detector.cpp
     ../src/logging.cpp
 )
 

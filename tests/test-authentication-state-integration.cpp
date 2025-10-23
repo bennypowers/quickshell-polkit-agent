@@ -56,6 +56,7 @@ private slots:
 
 private:
     PolkitWrapper *m_wrapper = nullptr;
+    MockNfcDetector *m_mockNfc = nullptr;
 
     // Helper methods
     void waitForSignal(QObject *obj, const char *signal, int timeout = 5000);
@@ -71,13 +72,20 @@ void TestAuthenticationStateIntegration::initTestCase()
 
 void TestAuthenticationStateIntegration::init()
 {
-    m_wrapper = new PolkitWrapper(this);
+    // Create mock NFC detector (default: no NFC reader present)
+    m_mockNfc = new MockNfcDetector(false);
+
+    // Inject mock detector into PolkitWrapper
+    m_wrapper = new PolkitWrapper(m_mockNfc, this);
 }
 
 void TestAuthenticationStateIntegration::cleanup()
 {
     delete m_wrapper;
     m_wrapper = nullptr;
+
+    // MockNfcDetector is owned by PolkitWrapper, don't delete it here
+    m_mockNfc = nullptr;
 }
 
 void TestAuthenticationStateIntegration::waitForSignal(QObject *obj, const char *signal, int timeout)

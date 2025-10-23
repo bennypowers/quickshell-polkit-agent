@@ -27,11 +27,18 @@
 #include <QTimer>
 #include <unistd.h>
 
-PolkitWrapper::PolkitWrapper(QObject *parent)
+PolkitWrapper::PolkitWrapper(INfcDetector *nfcDetector, QObject *parent)
     : PolkitQt1::Agent::Listener(parent)
     , m_authority(PolkitQt1::Authority::instance())
-    , m_nfcReaderPresent(false)
+    , m_nfcDetector(nfcDetector)
+    , m_ownDetector(false)
 {
+    // If no detector provided, create default UsbNfcDetector
+    if (!m_nfcDetector) {
+        m_nfcDetector = new UsbNfcDetector();
+        m_ownDetector = true;
+    }
+
     // Connect authority signals
     connect(m_authority, &PolkitQt1::Authority::checkAuthorizationFinished,
             this, &PolkitWrapper::onCheckAuthorizationFinished);
@@ -40,6 +47,11 @@ PolkitWrapper::PolkitWrapper(QObject *parent)
 PolkitWrapper::~PolkitWrapper()
 {
     unregisterAgent();
+
+    // Clean up detector if we own it
+    if (m_ownDetector && m_nfcDetector) {
+        delete m_nfcDetector;
+    }
 }
 
 bool PolkitWrapper::registerAgent()
@@ -147,9 +159,6 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
     qCDebug(polkitAgent) << "initiateAuthentication for" << actionId;
     qCDebug(polkitSensitive) << "initiateAuthentication cookie:" << cookie;
 
-    // Detect NFC reader presence
-    m_nfcReaderPresent = detectNfcReader();
-
     // Create new session state
     SessionState sessionState;
     sessionState.cookie = cookie;
@@ -250,7 +259,7 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
                     }
 
                     // Check if NFC reader is present and we haven't tried NFC for this session yet
-                    if (m_nfcReaderPresent && !session->nfcAttempted) {
+                    if (m_nfcDetector->isPresent() && !session->nfcAttempted) {
                         qCDebug(polkitAgent) << "NFC reader present, auto-attempting FIDO authentication";
                         setState(cookie, AuthenticationState::TRYING_FIDO);
                         setMethod(cookie, AuthenticationMethod::FIDO);
@@ -265,7 +274,7 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
                         session->session->setResponse("");
                     } else {
                         // Either no NFC reader, or NFC already tried and failed - show password prompt
-                        qCDebug(polkitAgent) << "Password request from PAM - NFC reader:" << m_nfcReaderPresent
+                        qCDebug(polkitAgent) << "Password request from PAM - NFC reader:" << m_nfcDetector->isPresent()
                                              << "already attempted:" << session->nfcAttempted;
 
                         if (session->nfcAttempted) {
@@ -505,34 +514,6 @@ QString PolkitWrapper::transformAuthMessage(const QString &actionId, const QStri
     
     // For non-run0 requests, return original message
     return message;
-}
-
-bool PolkitWrapper::detectNfcReader()
-{
-    // Allow mocking NFC reader presence for testing
-    QByteArray mockNfc = qgetenv("MOCK_NFC_READER");
-    if (!mockNfc.isEmpty()) {
-        bool mockPresent = (mockNfc == "1" || mockNfc.toLower() == "true");
-        qCDebug(polkitAgent) << "NFC reader detection: Mocked" << (mockPresent ? "present" : "absent");
-        return mockPresent;
-    }
-
-    QProcess lsusb;
-    lsusb.start("lsusb");
-
-    if (!lsusb.waitForFinished(1000)) {
-        qCWarning(polkitAgent) << "lsusb command timed out";
-        return false;
-    }
-
-    QString output = QString::fromUtf8(lsusb.readAllStandardOutput()).toLower();
-
-    // Check for ACR122U NFC reader (vendor ID 072f:)
-    bool nfcPresent = output.contains("072f:") || output.contains("acr122");
-
-    qCDebug(polkitAgent) << "NFC reader detection:" << (nfcPresent ? "ACR122U found" : "No NFC reader");
-
-    return nfcPresent;
 }
 
 // =============================================================================

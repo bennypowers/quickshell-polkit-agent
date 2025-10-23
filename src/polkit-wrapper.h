@@ -28,6 +28,8 @@
 #include <polkitqt1-agent-listener.h>
 #include <polkitqt1-agent-session.h>
 
+#include "nfc-detector.h"
+
 /*
  * Authentication state machine
  *
@@ -87,7 +89,7 @@ class PolkitWrapper : public PolkitQt1::Agent::Listener
     Q_ENUM(AuthenticationMethod)
 
 public:
-    explicit PolkitWrapper(QObject *parent = nullptr);
+    explicit PolkitWrapper(INfcDetector *nfcDetector = nullptr, QObject *parent = nullptr);
     ~PolkitWrapper();
 
     // Register/unregister as polkit agent
@@ -181,9 +183,9 @@ private:
     // Unified session state tracking (replaces three separate maps)
     QMap<QString, SessionState> m_sessions;
 
-    // NFC reader detection
-    bool m_nfcReaderPresent;
-    bool detectNfcReader();
+    // NFC reader detection (dependency injection)
+    INfcDetector *m_nfcDetector;
+    bool m_ownDetector;  // True if we created the detector (need to delete)
 
     // Message transformation for user-friendly text
     QString transformAuthMessage(const QString &actionId, const QString &message, const PolkitQt1::Details &details);

@@ -21,6 +21,8 @@ add_executable(quickshell-polkit-agent
     src/main.cpp
     src/polkit-wrapper.cpp
     src/polkit-wrapper.h
+    src/nfc-detector.cpp
+    src/nfc-detector.h
     src/ipc-server.cpp
     src/ipc-server.h
     src/logging.cpp
