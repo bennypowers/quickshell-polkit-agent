@@ -40,8 +40,6 @@
 enum class AuthenticationState {
     IDLE = 0,                    // No authentication in progress
     INITIATED,                   // Authentication request received, session created
-    TRYING_FIDO,                 // Auto-attempting FIDO/U2F authentication
-    FIDO_FAILED,                 // FIDO attempt failed, preparing fallback
     WAITING_FOR_PASSWORD,        // Password prompt shown, waiting for user input
     AUTHENTICATING,              // PAM is processing credentials
     AUTHENTICATION_FAILED,       // PAM rejected credentials (recoverable)
@@ -72,14 +70,10 @@ struct SessionState {
     QString cookie;
     QString actionId;
     int retryCount = 0;
-    bool nfcAttempted = false;
 
     // Polkit objects
     PolkitQt1::Agent::AsyncResult *result = nullptr;
     PolkitQt1::Agent::Session *session = nullptr;
-
-    // FIDO timeout timer
-    QTimer *fidoTimeoutTimer = nullptr;
 };
 
 class PolkitWrapper : public PolkitQt1::Agent::Listener
@@ -210,16 +204,10 @@ private:
     QString stateToString(AuthenticationState state) const;
     QString methodToString(AuthenticationMethod method) const;
 
-    // FIDO timeout handling
-    void startFidoTimeout(const QString &cookie);
-    void cancelFidoTimeout(const QString &cookie);
-    void onFidoTimeout(const QString &cookie);
-
     // Error message generation (inspired by GDM's get_friendly_error_message)
     // See: https://gitlab.gnome.org/GNOME/gdm/-/blob/main/daemon/gdm-session-worker.c:846
     QString getDefaultErrorMessage(AuthenticationState state, AuthenticationMethod method) const;
 
     // Configuration
-    static constexpr int FIDO_TIMEOUT_MS = 15000;  // 15 seconds
     static constexpr int MAX_AUTH_RETRIES = 3;     // Max failed attempts before lockout
 };

@@ -186,9 +186,6 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
                     qCDebug(polkitAgent) << "Polkit session completed, authorized:" << gainedAuthorization;
                     qCDebug(polkitSensitive) << "Session cookie:" << cookie;
 
-                    // Cancel any active FIDO timeout
-                    cancelFidoTimeout(cookie);
-
                     // Update state
                     if (gainedAuthorization) {
                         setState(cookie, AuthenticationState::COMPLETED);
@@ -275,41 +272,13 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
                         return;
                     }
 
-                    // Check if NFC reader is present and we haven't tried NFC for this session yet
-                    if (m_nfcDetector->isPresent() && !session->nfcAttempted) {
-                        qCDebug(polkitAgent) << "NFC reader present, auto-attempting FIDO authentication";
-                        setState(cookie, AuthenticationState::TRYING_FIDO);
-                        setMethod(cookie, AuthenticationMethod::FIDO);
-
-                        // Mark that we've attempted NFC for this session
-                        session->nfcAttempted = true;
-
-                        // Start FIDO timeout - if user doesn't tap within 15s, fallback to password
-                        startFidoTimeout(cookie);
-
-                        // Transition to AUTHENTICATING before responding (same as password flow)
-                        setState(cookie, AuthenticationState::AUTHENTICATING);
-
-                        // Auto-respond with empty string to let pam_u2f proceed with FIDO check
-                        session->session->setResponse("");
-                    } else {
-                        // Either no NFC reader, or NFC already tried and failed - show password prompt
-                        qCDebug(polkitAgent) << "Password request from PAM - NFC reader:" << m_nfcDetector->isPresent()
-                                             << "already attempted:" << session->nfcAttempted;
-
-                        if (session->nfcAttempted) {
-                            // FIDO failed, transitioning to password
-                            // Cancel timeout if it's still running
-                            cancelFidoTimeout(cookie);
-
-                            setState(cookie, AuthenticationState::FIDO_FAILED);
-                            emit authenticationMethodFailed(cookie, AuthenticationMethod::FIDO, "FIDO authentication failed");
-                        }
-
-                        setState(cookie, AuthenticationState::WAITING_FOR_PASSWORD);
-                        setMethod(cookie, AuthenticationMethod::PASSWORD);
-                        emit showPasswordRequest(actionId, request, echo, cookie);
-                    }
+                    // Show password prompt and wait for user input
+                    // PAM will handle FIDO (pam_u2f) if configured - we just respond to prompts
+                    // User can submit empty response if they want to use FIDO
+                    qCDebug(polkitAgent) << "Password request from PAM";
+                    setState(cookie, AuthenticationState::WAITING_FOR_PASSWORD);
+                    setMethod(cookie, AuthenticationMethod::PASSWORD);
+                    emit showPasswordRequest(actionId, request, echo, cookie);
                 });
 
         connect(pamSession, &PolkitQt1::Agent::Session::showError,
@@ -629,9 +598,6 @@ void PolkitWrapper::cleanupSession(const QString &cookie)
     qCDebug(polkitAgent) << "Cleaning up session:" << cookie
                          << "in state:" << stateToString(session->state);
 
-    // Cancel any active FIDO timeout
-    cancelFidoTimeout(cookie);
-
     // Clean up PAM session
     if (session->session) {
         // Disconnect all signals to prevent race conditions with queued signals
@@ -701,8 +667,6 @@ QString PolkitWrapper::stateToString(AuthenticationState state) const
     switch (state) {
     case AuthenticationState::IDLE: return "IDLE";
     case AuthenticationState::INITIATED: return "INITIATED";
-    case AuthenticationState::TRYING_FIDO: return "TRYING_FIDO";
-    case AuthenticationState::FIDO_FAILED: return "FIDO_FAILED";
     case AuthenticationState::WAITING_FOR_PASSWORD: return "WAITING_FOR_PASSWORD";
     case AuthenticationState::AUTHENTICATING: return "AUTHENTICATING";
     case AuthenticationState::AUTHENTICATION_FAILED: return "AUTHENTICATION_FAILED";
@@ -811,9 +775,6 @@ QString PolkitWrapper::getDefaultErrorMessage(AuthenticationState state, Authent
         }
         return "Authentication failed. Please try again.";
 
-    case AuthenticationState::FIDO_FAILED:
-        return "Security key authentication timed out or failed. Please enter your password.";
-
     case AuthenticationState::ERROR:
         return "An error occurred during authentication. Please try again.";
 
@@ -823,7 +784,6 @@ QString PolkitWrapper::getDefaultErrorMessage(AuthenticationState state, Authent
     // States that shouldn't produce user-facing errors
     case AuthenticationState::IDLE:
     case AuthenticationState::INITIATED:
-    case AuthenticationState::TRYING_FIDO:
     case AuthenticationState::WAITING_FOR_PASSWORD:
     case AuthenticationState::AUTHENTICATING:
     case AuthenticationState::COMPLETED:
@@ -832,100 +792,4 @@ QString PolkitWrapper::getDefaultErrorMessage(AuthenticationState state, Authent
 
     return "An unexpected error occurred.";
 }
-
-// =============================================================================
-// FIDO Timeout Handling
-// =============================================================================
-
-/*
- * Start FIDO timeout timer
- *
- * If user doesn't tap their security key within timeout, we'll automatically
- * fall back to password authentication. This prevents indefinite hangs.
- */
-void PolkitWrapper::startFidoTimeout(const QString &cookie)
-{
-    SessionState *session = getSession(cookie);
-    if (!session) {
-        qCWarning(polkitAgent) << "Cannot start FIDO timeout for non-existent session:" << cookie;
-        return;
-    }
-
-    // Clean up any existing timer first
-    if (session->fidoTimeoutTimer) {
-        session->fidoTimeoutTimer->stop();
-        session->fidoTimeoutTimer->deleteLater();
-        session->fidoTimeoutTimer = nullptr;
-    }
-
-    // Create new single-shot timer
-    session->fidoTimeoutTimer = new QTimer(this);
-    session->fidoTimeoutTimer->setSingleShot(true);
-    session->fidoTimeoutTimer->setInterval(FIDO_TIMEOUT_MS);
-
-    connect(session->fidoTimeoutTimer, &QTimer::timeout, this, [this, cookie]() {
-        onFidoTimeout(cookie);
-    });
-
-    session->fidoTimeoutTimer->start();
-
-    qCDebug(polkitAgent) << "Started FIDO timeout for" << cookie
-                         << "- will timeout in" << FIDO_TIMEOUT_MS << "ms";
-}
-
-/*
- * Cancel FIDO timeout timer
- *
- * Called when FIDO succeeds/fails before timeout, or when session is cancelled.
- */
-void PolkitWrapper::cancelFidoTimeout(const QString &cookie)
-{
-    SessionState *session = getSession(cookie);
-    if (!session || !session->fidoTimeoutTimer) {
-        return;  // No timer to cancel
-    }
-
-    qCDebug(polkitAgent) << "Cancelling FIDO timeout for" << cookie;
-
-    session->fidoTimeoutTimer->stop();
-    session->fidoTimeoutTimer->deleteLater();
-    session->fidoTimeoutTimer = nullptr;
-}
-
-/*
- * Handle FIDO timeout
- *
- * User didn't tap their security key in time. Fall back to password.
- */
-void PolkitWrapper::onFidoTimeout(const QString &cookie)
-{
-    qCDebug(polkitAgent) << "FIDO timeout occurred for" << cookie;
-
-    SessionState *session = getSession(cookie);
-    if (!session) {
-        qCWarning(polkitAgent) << "FIDO timeout for non-existent session:" << cookie;
-        return;
-    }
-
-    // Clean up timer
-    if (session->fidoTimeoutTimer) {
-        session->fidoTimeoutTimer->deleteLater();
-        session->fidoTimeoutTimer = nullptr;
-    }
-
-    // Only handle timeout if we're still waiting for FIDO
-    if (session->state != AuthenticationState::TRYING_FIDO) {
-        qCDebug(polkitAgent) << "Ignoring FIDO timeout - no longer in TRYING_FIDO state";
-        return;
-    }
-
-    // Transition to FIDO_FAILED state
-    setState(cookie, AuthenticationState::FIDO_FAILED);
-    emit authenticationMethodFailed(cookie, AuthenticationMethod::FIDO,
-                                   "Security key timeout - no response within 15 seconds");
-
-    // PAM will call our request() handler again, which will show password prompt
-    // We don't need to do anything else here - the PAM conversation continues
-}
-
 
