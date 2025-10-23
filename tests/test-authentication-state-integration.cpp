@@ -54,6 +54,8 @@ private:
 
     // Helper methods
     void waitForSignal(QObject *obj, const char *signal, int timeout = 5000);
+    bool waitForState(const QString &cookie, AuthenticationState expectedState, int timeoutMs = 2000);
+    int testDelay(int baseMs); // Returns longer delays in E2E mode
     void simulatePamPasswordRequest(const QString &cookie);
     void simulatePamSuccess(const QString &cookie);
     void simulatePamError(const QString &cookie, const QString &error);
@@ -77,17 +79,54 @@ void TestAuthenticationStateIntegration::init()
 
 void TestAuthenticationStateIntegration::cleanup()
 {
+    // Cancel any active sessions first
+    if (m_wrapper && m_wrapper->hasActiveSessions()) {
+        m_wrapper->cancelAuthorization();
+        // In E2E mode with real polkit, give PAM helper time to fully shut down
+        QTest::qWait(testDelay(100));
+    }
+
     delete m_wrapper;
     m_wrapper = nullptr;
 
     // MockNfcDetector is owned by PolkitWrapper, don't delete it here
     m_mockNfc = nullptr;
+
+    // Extra cleanup delay in E2E mode to ensure polkit daemon is ready for next test
+    if (qgetenv("POLKIT_E2E_MODE") == "1") {
+        QTest::qWait(200);
+    }
 }
 
 void TestAuthenticationStateIntegration::waitForSignal(QObject *obj, const char *signal, int timeout)
 {
     QSignalSpy spy(obj, signal);
     QVERIFY2(spy.wait(timeout), QString("Signal %1 not emitted within %2ms").arg(signal).arg(timeout).toUtf8());
+}
+
+bool TestAuthenticationStateIntegration::waitForState(const QString &cookie, AuthenticationState expectedState, int timeoutMs)
+{
+    // Poll for the expected state with a timeout
+    QElapsedTimer timer;
+    timer.start();
+
+    while (timer.elapsed() < timeoutMs) {
+        if (m_wrapper->authenticationState(cookie) == expectedState) {
+            return true;
+        }
+        QTest::qWait(50); // Poll every 50ms
+    }
+
+    return false;
+}
+
+int TestAuthenticationStateIntegration::testDelay(int baseMs)
+{
+    // In E2E mode with real polkit daemon, use longer delays to avoid race conditions
+    if (qgetenv("POLKIT_E2E_MODE") == "1") {
+        return baseMs * 3; // Triple the delay for E2E
+    }
+    return baseMs;
 }
 
 /*
@@ -436,7 +475,7 @@ void TestAuthenticationStateIntegration::testStateTransitionFromIdleToAuthentica
     m_wrapper->testTriggerAuthentication(testActionId, "Test authentication", "dialog-password", testCookie);
 
     // Process events to allow async signals
-    QTest::qWait(100);
+    QTest::qWait(testDelay(100));
 
     // VERIFY: State changed to INITIATED
     QVERIFY(stateChangeSpy.count() > 0);
@@ -459,9 +498,9 @@ void TestAuthenticationStateIntegration::testStateTransitionFromIdleToAuthentica
              qPrintable(QString("Expected INITIATED or WAITING_FOR_PASSWORD, got %1")
                        .arg(static_cast<int>(currentState))));
 
-    // Cleanup
+    // Cleanup - use longer delay in E2E to let PAM helper shut down
     m_wrapper->cancelAuthorization();
-    QTest::qWait(50);
+    QTest::qWait(testDelay(100));
 }
 
 /*
@@ -484,22 +523,25 @@ void TestAuthenticationStateIntegration::testStateTransitionToCompletedOnSuccess
 
     // Trigger authentication
     m_wrapper->testTriggerAuthentication(testActionId, "Test success transition", "dialog-password", testCookie);
-    QTest::qWait(200);
+    QTest::qWait(testDelay(200));
 
-    // Wait for password prompt
-    QTest::qWait(300);
+    // Wait for password prompt - use helper to poll for state
+    bool reachedPasswordPrompt = waitForState(testCookie, AuthenticationState::WAITING_FOR_PASSWORD, testDelay(1500));
 
-    // Check if PAM helper is running
-    AuthenticationState currentState = m_wrapper->authenticationState(testCookie);
-    if (currentState != AuthenticationState::WAITING_FOR_PASSWORD) {
-        qWarning() << "WAITING_FOR_PASSWORD state not reached - polkit-agent-helper-1 may not be setuid";
+    if (!reachedPasswordPrompt) {
+        AuthenticationState currentState = m_wrapper->authenticationState(testCookie);
+        qWarning() << "WAITING_FOR_PASSWORD state not reached, current state:"
+                   << static_cast<int>(currentState);
         m_wrapper->cancelAuthorization();
+        QTest::qWait(testDelay(100));
         QSKIP("Polkit helper not properly configured - run in E2E container");
     }
 
     // Submit correct password
     m_wrapper->submitAuthenticationResponse(testCookie, "testpass");
-    QTest::qWait(500);
+
+    // Wait for authentication to complete
+    QTest::qWait(testDelay(500));
 
     // VERIFY: Password accepted (state reaches AUTHENTICATING)
     bool foundAuthenticating = false;
@@ -510,6 +552,9 @@ void TestAuthenticationStateIntegration::testStateTransitionToCompletedOnSuccess
         }
     }
     QVERIFY2(foundAuthenticating, "Expected AUTHENTICATING state after successful password");
+
+    // Give time for cleanup to complete before test ends
+    QTest::qWait(testDelay(100));
 
     // NOTE: COMPLETED state requires AsyncResult which testTriggerAuthentication doesn't provide
     // In real usage with polkitd, the state would transition: AUTHENTICATING → COMPLETED → IDLE
