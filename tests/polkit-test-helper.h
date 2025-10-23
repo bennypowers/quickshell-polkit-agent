@@ -47,8 +47,10 @@ public:
     /*
      * Trigger authentication for testing
      *
-     * This simulates polkit calling our agent. We create a fake AsyncResult
-     * to capture the result.
+     * NOTE: This helper is deprecated. Use PolkitWrapper::testTriggerAuthentication()
+     * directly instead, which is available when BUILD_TESTING is defined.
+     *
+     * See: src/polkit-wrapper.h testTriggerAuthentication() method
      */
     static void triggerAuthentication(
         PolkitWrapper *wrapper,
@@ -57,22 +59,10 @@ public:
         const QString &iconName,
         const QString &cookie)
     {
-        // Create test identity
-        PolkitQt1::Identity::List identities;
-        identities << createTestIdentity();
-
-        // Create test details
-        PolkitQt1::Details details = createTestDetails();
-
-        // Create AsyncResult to capture result
-        // Note: This is tricky - PolkitQt1::Agent::AsyncResult is created by polkit
-        // For now, we'll use nullptr and expect the test to handle this
-        // In real tests, we'd need to mock the AsyncResult too
-
-        // Call initiateAuthentication directly
-        // This is protected, so we can't call it directly from tests
-        // We need to make it public for testing or use a friend class
-
-        // TODO: Add test-only method to PolkitWrapper to expose this
+#ifdef BUILD_TESTING
+        wrapper->testTriggerAuthentication(actionId, message, iconName, cookie);
+#else
+        qWarning() << "testTriggerAuthentication() only available when BUILD_TESTING is defined";
+#endif
     }
 };
