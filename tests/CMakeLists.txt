@@ -147,3 +147,27 @@ add_custom_target(run-security-tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --tests-regex "Security|Fuzz|Permission|Replay|RateLimit|Audit|UIConfusion"
     COMMENT "Running security tests only"
 )
+
+# E2E tests with Podman
+find_program(PODMAN_EXECUTABLE podman)
+if(PODMAN_EXECUTABLE)
+    add_test(NAME E2EPodman
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/e2e/run-podman-e2e.sh
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    set_tests_properties(E2EPodman PROPERTIES
+        TIMEOUT 300
+        LABELS "e2e;integration"
+    )
+    message(STATUS "Podman found: E2E tests enabled")
+else()
+    message(WARNING "Podman not found: E2E tests disabled")
+    message(WARNING "  Install with: sudo dnf install podman (Fedora)")
+    message(WARNING "            or: sudo apt install podman (Debian/Ubuntu)")
+endif()
+
+# Add custom target to run only e2e tests
+add_custom_target(run-e2e-tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --tests-regex "E2E"
+    COMMENT "Running E2E tests only"
+)

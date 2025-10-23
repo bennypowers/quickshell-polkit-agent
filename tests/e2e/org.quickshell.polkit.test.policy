@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Quickshell Polkit Agent E2E Tests</vendor>
+  <vendor_url>https://github.com/quickshell/quickshell-polkit-agent</vendor_url>
+
+  <action id="org.quickshell.polkit.test.auth-required">
+    <description>Test action requiring authentication</description>
+    <message>Authentication required for test action</message>
+    <icon_name>dialog-password</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_self</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.quickshell.polkit.test.deny">
+    <description>Test action that should be denied</description>
+    <message>This action will be denied</message>
+    <icon_name>dialog-error</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>no</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.quickshell.polkit.test.allow">
+    <description>Test action that should be allowed</description>
+    <message>This action is allowed without authentication</message>
+    <icon_name>dialog-information</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

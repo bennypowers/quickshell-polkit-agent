@@ -173,3 +173,40 @@ jobs:
         name: static-analysis-results
         path: |
           cppcheck-results.xml
+
+  e2e-tests:
+    name: End-to-End Tests (Podman)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Podman
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y podman
+
+    - name: Run E2E tests
+      id: e2e
+      run: |
+        cd tests/e2e
+        ./run-podman-e2e.sh
+
+    - name: Upload E2E test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: e2e-test-results
+        path: |
+          tests/e2e/test-results/
+
+    - name: E2E test summary
+      if: always()
+      run: |
+        echo "## E2E Test Summary" >> $GITHUB_STEP_SUMMARY
+        if [ ${{ steps.e2e.outcome }} == "success" ]; then
+          echo "- ✅ Podman E2E Tests Passed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "- ❌ Podman E2E Tests Failed" >> $GITHUB_STEP_SUMMARY
+        fi

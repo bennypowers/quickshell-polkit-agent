@@ -1,0 +1,48 @@
+# Containerfile for end-to-end testing with real polkit daemon
+# Based on Fedora for polkit/dbus infrastructure
+FROM fedora:latest
+
+# Install dependencies for building and running polkit agent with real polkit daemon
+RUN dnf install -y \
+    cmake \
+    gcc-c++ \
+    make \
+    qt6-qtbase-devel \
+    polkit-qt6-1-devel \
+    polkit \
+    dbus-daemon \
+    dbus-x11 \
+    python3 \
+    python3-dbus \
+    python3-gobject \
+    procps-ng \
+    util-linux \
+    sudo \
+    which \
+    && dnf clean all
+
+# Create test user (non-root user for testing authentication)
+RUN useradd -m -s /bin/bash testuser && \
+    echo "testuser:testpass" | chpasswd && \
+    usermod -aG wheel testuser
+
+# Set up working directory
+WORKDIR /workspace
+
+# Copy source code
+COPY . /workspace/
+
+# Install test polkit policy and rules
+RUN mkdir -p /etc/polkit-1/rules.d /usr/share/polkit-1/actions && \
+    cp /workspace/tests/e2e/polkit-test-rules.conf /etc/polkit-1/rules.d/50-test-actions.rules && \
+    cp /workspace/tests/e2e/org.quickshell.polkit.test.policy /usr/share/polkit-1/actions/
+
+# Build the agent
+RUN mkdir -p build && \
+    cd build && \
+    cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug && \
+    make -j$(nproc)
+
+# Start dbus-daemon as part of container startup
+# Tests will run as testuser with dbus session
+CMD ["/bin/bash"]

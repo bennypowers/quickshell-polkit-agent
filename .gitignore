@@ -27,6 +27,18 @@ test-*.py
 *.log
 Testing/
 
+# E2E test artifacts
+tests/e2e/test-results/
+tests/e2e/*.log
+tests/e2e/core.*
+core
+core.*
+
+# Podman/Docker test artifacts
+.podman-test-volumes/
+*.pid
+*.socket
+
 # Gentoo packaging - belongs in overlay, not main repo
 packaging/gentoo/
 
