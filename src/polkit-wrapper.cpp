@@ -602,16 +602,8 @@ void PolkitWrapper::cleanupSession(const QString &cookie)
     qCDebug(polkitAgent) << "Cleaning up session:" << cookie
                          << "in state:" << stateToString(session->state);
 
-    // Clean up PAM session
-    if (session->session) {
-        // Disconnect all signals to prevent race conditions with queued signals
-        disconnect(session->session, nullptr, this, nullptr);
-        session->session->cancel();
-        session->session->deleteLater();
-        session->session = nullptr;
-    }
-
-    // Complete async result if still pending
+    // Complete async result if still pending - do this FIRST
+    // to signal polkit daemon before we cancel the PAM session
     if (session->result) {
         // Only complete if not already completed
         if (session->state != AuthenticationState::COMPLETED) {
@@ -619,6 +611,15 @@ void PolkitWrapper::cleanupSession(const QString &cookie)
             session->result->setCompleted();
         }
         session->result = nullptr;
+    }
+
+    // Clean up PAM session AFTER completing result
+    if (session->session) {
+        // Disconnect all signals to prevent race conditions with queued signals
+        disconnect(session->session, nullptr, this, nullptr);
+        session->session->cancel();
+        session->session->deleteLater();
+        session->session = nullptr;
     }
 
     // Remove from map
