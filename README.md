@@ -94,7 +94,7 @@ Once installed and configured, custom authentication dialogs will automatically 
 - `showAuthDialog(actionId, message, iconName, cookie)` - Authentication required, show UI
 - `showPasswordRequest(actionId, request, echo, cookie)` - Password needed (FIDO fallback)
 - `authorizationResult(authorized, actionId)` - Final result received
-- `authorizationError(error)` - Simple error message (deprecated, don't use)
+- `authorizationError(error)` - General/authority errors (used by IPC protocol)
 
 **Connection Status:**
 - `connected()` - Connected to agent backend

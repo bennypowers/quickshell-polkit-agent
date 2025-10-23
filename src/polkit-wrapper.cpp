@@ -378,9 +378,6 @@ void PolkitWrapper::submitAuthenticationResponse(const QString &cookie, const QS
         emit authenticationError(cookie, AuthenticationState::MAX_RETRIES_EXCEEDED,
                                 session->method, defaultMsg,
                                 "User attempted to submit response after max retries");
-
-        // Also emit simple error for backwards compatibility
-        emit authorizationError(defaultMsg);
         return;
     }
 
