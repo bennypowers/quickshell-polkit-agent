@@ -181,6 +181,15 @@ add_custom_target(run-security-tests
     COMMENT "Running security tests only"
 )
 
+# E2E polkit authorization trigger helper
+add_executable(trigger-polkit-action
+    e2e/trigger-polkit-action.cpp
+)
+target_link_libraries(trigger-polkit-action
+    Qt6::Core
+    PolkitQt6-1::Core
+)
+
 # E2E tests with Podman
 find_program(PODMAN_EXECUTABLE podman)
 if(PODMAN_EXECUTABLE)

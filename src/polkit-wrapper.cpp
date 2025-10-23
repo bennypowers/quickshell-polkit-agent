@@ -58,18 +58,15 @@ bool PolkitWrapper::registerAgent()
 {
     // Create subject for current session
     QString sessionId = qgetenv("XDG_SESSION_ID");
-    PolkitQt1::Subject subject;
-    
-    if (!sessionId.isEmpty()) {
-        subject = PolkitQt1::UnixSessionSubject(sessionId);
-        qCDebug(polkitAgent) << "Using session subject for session:" << sessionId;
-    } else {
-        subject = PolkitQt1::UnixProcessSubject(getpid());
-        qCDebug(polkitAgent) << "Using process subject for PID:" << getpid();
-    }
 
-    // Register as polkit agent
-    bool success = registerListener(subject, "/quickshell/polkit/agent");
+    bool success;
+    if (!sessionId.isEmpty()) {
+        qCDebug(polkitAgent) << "Using session subject for session:" << sessionId;
+        success = registerListener(PolkitQt1::UnixSessionSubject(sessionId), "/quickshell/polkit/agent");
+    } else {
+        qCDebug(polkitAgent) << "Using process subject for PID:" << getpid();
+        success = registerListener(PolkitQt1::UnixProcessSubject(getpid()), "/quickshell/polkit/agent");
+    }
 
     if (success) {
         qCDebug(polkitAgent) << "Successfully registered as polkit agent";

@@ -294,6 +294,9 @@ test_authentication_state_integration() {
     export PAM_WRAPPER=1
     export PAM_WRAPPER_SERVICE_DIR="$WORKSPACE/tests/pam"
 
+    # Enable E2E mode for FIDO tests - use real polkit authorization flow
+    export POLKIT_E2E_MODE=1
+
     # Find pam_wrapper library
     PAM_WRAPPER_LIB=$(find /usr/lib64 /usr/lib -name "libpam_wrapper.so" 2>/dev/null | head -n1)
     if [ -z "$PAM_WRAPPER_LIB" ]; then
@@ -311,15 +314,33 @@ test_authentication_state_integration() {
 
     # Run the authentication state integration tests
     log_info "Running authentication state integration tests..."
+    log_info "Environment: POLKIT_E2E_MODE=$POLKIT_E2E_MODE, PAM_WRAPPER=$PAM_WRAPPER"
 
     if "$TEST_BIN" -v1 > "$TEST_RESULTS_DIR/auth-state-integration.log" 2>&1; then
-        test_passed "Authentication state integration tests"
-        return 0
+        # Parse QTest results
+        QTEST_TOTALS=$(grep "^Totals:" "$TEST_RESULTS_DIR/auth-state-integration.log" || echo "")
+        if [ -n "$QTEST_TOTALS" ]; then
+            log_info "QTest results: $QTEST_TOTALS"
+        fi
+
+        # Extract individual test counts
+        PASSED=$(echo "$QTEST_TOTALS" | grep -oP '\d+(?= passed)' || echo "0")
+        FAILED=$(echo "$QTEST_TOTALS" | grep -oP '\d+(?= failed)' || echo "0")
+        SKIPPED=$(echo "$QTEST_TOTALS" | grep -oP '\d+(?= skipped)' || echo "0")
+
+        if [ "$FAILED" -eq 0 ]; then
+            test_passed "Authentication state integration ($PASSED passed, $SKIPPED skipped)"
+            return 0
+        else
+            log_error "$FAILED QTest(s) failed - see $TEST_RESULTS_DIR/auth-state-integration.log"
+            test_failed "Authentication state integration ($PASSED passed, $FAILED failed, $SKIPPED skipped)"
+            return 1
+        fi
     else
         log_error "Authentication state tests failed - see $TEST_RESULTS_DIR/auth-state-integration.log"
         log_info "Test summary (last 20 lines):"
         tail -20 "$TEST_RESULTS_DIR/auth-state-integration.log" || true
-        test_failed "Authentication state integration tests"
+        test_failed "Authentication state integration tests - binary crashed"
         return 1
     fi
 }
@@ -396,7 +417,8 @@ main() {
         log_info "polkitd started (PID: $POLKITD_PID)"
     fi
 
-    # Verify polkit-agent-helper-1 is setuid root
+    # For testing: Remove setuid from polkit-agent-helper-1 so pam_wrapper can work
+    # (LD_PRELOAD is stripped for setuid binaries, preventing pam_wrapper from working)
     HELPER_PATH=""
     if [ -f /usr/lib/polkit-1/polkit-agent-helper-1 ]; then
         HELPER_PATH="/usr/lib/polkit-1/polkit-agent-helper-1"
@@ -406,16 +428,16 @@ main() {
 
     if [ -n "$HELPER_PATH" ]; then
         HELPER_PERMS=$(stat -c "%a" "$HELPER_PATH")
-        if [ "$HELPER_PERMS" != "4755" ]; then
-            log_warn "polkit-agent-helper-1 is not setuid root (perms: $HELPER_PERMS)"
-            log_warn "Some authentication tests may fail"
+        if [ "$HELPER_PERMS" = "4755" ]; then
+            log_info "Removing setuid from polkit-agent-helper-1 to enable pam_wrapper for testing"
+            chmod 0755 "$HELPER_PATH"
+            log_info "polkit-agent-helper-1 configured for testing (setuid removed)"
         else
-            log_info "polkit-agent-helper-1 is properly configured (setuid root)"
+            log_info "polkit-agent-helper-1 already not setuid (perms: $HELPER_PERMS)"
         fi
     fi
 
     # Authentication state integration tests (container-only)
-    # These tests require polkit-agent-helper-1 to be setuid root
     test_authentication_state_integration
 
     # Full agent integration tests require system D-Bus
