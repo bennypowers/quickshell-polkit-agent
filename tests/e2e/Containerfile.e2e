@@ -9,6 +9,7 @@ RUN dnf install -y \
     gcc-c++ \
     make \
     qt6-qtbase-devel \
+    qt6-qtdeclarative-devel \
     polkit-qt6-1-devel \
     polkit \
     pam-devel \
