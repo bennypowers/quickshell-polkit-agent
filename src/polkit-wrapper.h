@@ -113,6 +113,17 @@ public:
                                    const QString &message,
                                    const QString &iconName,
                                    const QString &cookie);
+
+    /*
+     * Test-only method to manually complete a PAM session
+     *
+     * This allows testing retry logic without requiring real polkit-agent-helper-1.
+     * Manually triggers the completed signal to simulate PAM finishing.
+     *
+     * @param cookie The session cookie
+     * @param success Whether authentication succeeded
+     */
+    void testCompleteSession(const QString &cookie, bool success);
 #endif
 
 public slots:

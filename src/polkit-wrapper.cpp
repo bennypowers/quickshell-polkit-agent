@@ -756,6 +756,25 @@ void PolkitWrapper::testTriggerAuthentication(const QString &actionId,
     // Call protected initiateAuthentication method
     initiateAuthentication(actionId, message, iconName, details, cookie, identities, result);
 }
+
+void PolkitWrapper::testCompleteSession(const QString &cookie, bool success)
+{
+    SessionState *session = getSession(cookie);
+    if (!session || !session->session) {
+        qCWarning(polkitAgent) << "testCompleteSession: No session found for cookie:" << cookie;
+        return;
+    }
+
+    qCDebug(polkitAgent) << "testCompleteSession: Manually completing session for" << cookie
+                         << "with success =" << success;
+
+    // Manually emit the completed signal
+    // This triggers all the same logic as real PAM completion:
+    // - Retry count increment
+    // - State transitions
+    // - Session restart or cleanup
+    emit session->session->completed(success);
+}
 #endif
 
 // =============================================================================

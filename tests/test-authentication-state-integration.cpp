@@ -461,10 +461,17 @@ void TestAuthenticationStateIntegration::testWrongPasswordRetry()
 
     // Submit WRONG password
     m_wrapper->submitAuthenticationResponse(testCookie, "wrongpassword");
-    QTest::qWait(500);
+    QTest::qWait(100);
+
+    // Manually complete the session with failure (simulates PAM returning failure)
+    m_wrapper->testCompleteSession(testCookie, false);
+    QTest::qWait(200);
 
     // VERIFY: Session still active (retry allowed)
     QVERIFY(m_wrapper->hasActiveSessions());
+
+    // VERIFY: Retry count incremented
+    QCOMPARE(m_wrapper->sessionRetryCount(testCookie), 1);
 
     // VERIFY: State went back to WAITING_FOR_PASSWORD (retry)
     bool foundWaitingAgain = false;
@@ -478,20 +485,25 @@ void TestAuthenticationStateIntegration::testWrongPasswordRetry()
 
     // Submit CORRECT password
     m_wrapper->submitAuthenticationResponse(testCookie, "testpass");
-    QTest::qWait(500);
+    QTest::qWait(100);
 
-    // VERIFY: Password accepted (reaches AUTHENTICATING)
-    bool foundAuthenticating = false;
-    for (int i = stateChangeSpy.count() - 5; i < stateChangeSpy.count(); i++) {
-        if (i >= 0 && stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::AUTHENTICATING) {
-            foundAuthenticating = true;
+    // Complete session with success
+    m_wrapper->testCompleteSession(testCookie, true);
+    QTest::qWait(100);
+
+    // VERIFY: Authentication successful
+    bool foundCompleted = false;
+    for (int i = 0; i < stateChangeSpy.count(); i++) {
+        if (stateChangeSpy.at(i).at(1).value<AuthenticationState>() == AuthenticationState::COMPLETED) {
+            foundCompleted = true;
             break;
         }
     }
-    QVERIFY2(foundAuthenticating, "Expected AUTHENTICATING state after correct password");
+    QVERIFY2(foundCompleted, "Expected COMPLETED state after correct password");
 
-    // NOTE: Error/result signals require AsyncResult which testTriggerAuthentication doesn't provide
-    // We verify the retry flow works (wrong password → retry → correct password accepted)
+    // VERIFY: Session cleaned up
+    QTest::qWait(50);
+    QVERIFY(!m_wrapper->hasActiveSessions());
 }
 
 /*
@@ -545,20 +557,28 @@ void TestAuthenticationStateIntegration::testMultipleWrongPasswordsMaxRetries()
 
     // Attempt 1: Wrong password
     m_wrapper->submitAuthenticationResponse(testCookie, "wrong1");
-    QTest::qWait(500);
+    QTest::qWait(100);
+    m_wrapper->testCompleteSession(testCookie, false);
+    QTest::qWait(100);
     QVERIFY(m_wrapper->hasActiveSessions());
     QCOMPARE(m_wrapper->sessionRetryCount(testCookie), 1);
 
     // Attempt 2: Wrong password
     m_wrapper->submitAuthenticationResponse(testCookie, "wrong2");
-    QTest::qWait(500);
+    QTest::qWait(100);
+    m_wrapper->testCompleteSession(testCookie, false);
+    QTest::qWait(100);
     QVERIFY(m_wrapper->hasActiveSessions());
     QCOMPARE(m_wrapper->sessionRetryCount(testCookie), 2);
 
     // Attempt 3: Wrong password (should hit max retries)
     m_wrapper->submitAuthenticationResponse(testCookie, "wrong3");
-    QTest::qWait(500);
-    QCOMPARE(m_wrapper->sessionRetryCount(testCookie), 3);
+    QTest::qWait(100);
+    m_wrapper->testCompleteSession(testCookie, false);
+    QTest::qWait(100);
+
+    // NOTE: Can't check retry count here - session is cleaned up after MAX_RETRIES_EXCEEDED
+    // The state transition to MAX_RETRIES_EXCEEDED (checked below) proves retry count hit 3
 
     // VERIFY: State reached MAX_RETRIES_EXCEEDED
     bool foundMaxRetries = false;
@@ -714,11 +734,19 @@ void TestAuthenticationStateIntegration::testStateTransitionToIdleOnError()
 
     // Submit wrong passwords 3 times to trigger max retries error
     m_wrapper->submitAuthenticationResponse(testCookie, "wrong1");
-    QTest::qWait(500);
+    QTest::qWait(100);
+    m_wrapper->testCompleteSession(testCookie, false);
+    QTest::qWait(100);
+
     m_wrapper->submitAuthenticationResponse(testCookie, "wrong2");
-    QTest::qWait(500);
+    QTest::qWait(100);
+    m_wrapper->testCompleteSession(testCookie, false);
+    QTest::qWait(100);
+
     m_wrapper->submitAuthenticationResponse(testCookie, "wrong3");
-    QTest::qWait(500);
+    QTest::qWait(100);
+    m_wrapper->testCompleteSession(testCookie, false);
+    QTest::qWait(100);
 
     // VERIFY: State reached MAX_RETRIES_EXCEEDED
     bool foundMaxRetries = false;
