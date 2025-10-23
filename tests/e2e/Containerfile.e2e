@@ -5,11 +5,13 @@ FROM fedora:latest
 # Install dependencies for building and running polkit agent with real polkit daemon
 RUN dnf install -y \
     cmake \
+    gcc \
     gcc-c++ \
     make \
     qt6-qtbase-devel \
     polkit-qt6-1-devel \
     polkit \
+    pam-devel \
     dbus-daemon \
     dbus-x11 \
     python3 \
@@ -37,11 +39,16 @@ RUN mkdir -p /etc/polkit-1/rules.d /usr/share/polkit-1/actions && \
     cp /workspace/tests/e2e/polkit-test-rules.conf /etc/polkit-1/rules.d/50-test-actions.rules && \
     cp /workspace/tests/e2e/org.quickshell.polkit.test.policy /usr/share/polkit-1/actions/
 
-# Build the agent
+# Build the agent and PAM mock modules
 RUN mkdir -p build && \
     cd build && \
     cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug && \
-    make -j$(nproc)
+    make -j$(nproc) && \
+    # Install mock PAM module for FIDO testing \
+    if [ -f tests/pam/pam_fido_mock.so ]; then \
+        cp tests/pam/pam_fido_mock.so /usr/lib64/security/ ; \
+        echo "Installed pam_fido_mock.so for FIDO testing" ; \
+    fi
 
 # Start dbus-daemon as part of container startup
 # Tests will run as testuser with dbus session

@@ -1,0 +1,19 @@
+#%PAM-1.0
+# PAM configuration for polkit-1 with FIDO mock
+# Used for testing FIDO authentication flows in e2e tests
+#
+# Control behavior via environment variables:
+#   FIDO_TEST_MODE=success  - FIDO succeeds
+#   FIDO_TEST_MODE=timeout  - FIDO times out (>15s)
+#   FIDO_TEST_MODE=fail     - FIDO fails
+#   FIDO_TEST_DELAY=<ms>    - Delay before response
+
+# Try FIDO first
+auth        sufficient    pam_fido_mock.so
+
+# Fallback to password if FIDO fails
+auth        required      pam_permit.so
+
+account     required      pam_permit.so
+password    required      pam_permit.so
+session     required      pam_permit.so

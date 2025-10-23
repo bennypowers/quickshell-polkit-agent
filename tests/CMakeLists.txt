@@ -171,3 +171,6 @@ add_custom_target(run-e2e-tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --tests-regex "E2E"
     COMMENT "Running E2E tests only"
 )
+
+# Build mock PAM modules for testing
+add_subdirectory(pam)
