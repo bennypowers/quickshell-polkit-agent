@@ -100,6 +100,19 @@ public:
     bool hasActiveSessions() const;
     int sessionRetryCount(const QString &cookie) const;
 
+#ifdef BUILD_TESTING
+    /*
+     * Test-only method to trigger authentication
+     *
+     * In production, initiateAuthentication() is called by polkit daemon via D-Bus.
+     * For testing, we expose this to allow triggering authentication flows.
+     */
+    void testTriggerAuthentication(const QString &actionId,
+                                   const QString &message,
+                                   const QString &iconName,
+                                   const QString &cookie);
+#endif
+
 public slots:
     void checkAuthorization(const QString &actionId, const QString &details = QString());
     void cancelAuthorization();

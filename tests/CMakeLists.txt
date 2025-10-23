@@ -55,6 +55,10 @@ add_executable(test-authentication-state-integration
     ../src/polkit-wrapper.cpp
     ../src/logging.cpp
 )
+
+# Enable test-only methods
+target_compile_definitions(test-authentication-state-integration PRIVATE BUILD_TESTING=1)
+
 target_link_libraries(test-authentication-state-integration
     Qt6::Test
     Qt6::Core
@@ -62,7 +66,29 @@ target_link_libraries(test-authentication-state-integration
     PolkitQt6-1::Core
     PolkitQt6-1::Agent
 )
+
+# Add the test first
 add_test(NAME AuthenticationStateIntegration COMMAND test-authentication-state-integration)
+
+# Configure test with pam_wrapper if available
+find_library(PAM_WRAPPER_LIBRARY NAMES pam_wrapper)
+if(PAM_WRAPPER_LIBRARY)
+    message(STATUS "Found pam_wrapper: ${PAM_WRAPPER_LIBRARY}")
+
+    # Set up environment for PAM mocking
+    set(PAM_WRAPPER_SERVICE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pam")
+
+    set_tests_properties(AuthenticationStateIntegration PROPERTIES
+        ENVIRONMENT "PAM_WRAPPER=1;PAM_WRAPPER_SERVICE_DIR=${PAM_WRAPPER_SERVICE_DIR};LD_PRELOAD=${PAM_WRAPPER_LIBRARY}"
+    )
+
+    message(STATUS "PAM wrapper enabled for AuthenticationStateIntegration test")
+    message(STATUS "  Service dir: ${PAM_WRAPPER_SERVICE_DIR}")
+else()
+    message(WARNING "pam_wrapper not found - some tests will be skipped")
+    message(WARNING "  Install with: sudo dnf install pam_wrapper (Fedora)")
+    message(WARNING "            or: sudo apt install libpam-wrapper (Debian/Ubuntu)")
+endif()
 
 # Add Python security tests
 find_program(PYTHON3_EXECUTABLE python3)

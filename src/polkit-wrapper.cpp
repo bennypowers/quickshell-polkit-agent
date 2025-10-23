@@ -716,6 +716,40 @@ QString PolkitWrapper::methodToString(AuthenticationMethod method) const
     return "UNKNOWN";
 }
 
+#ifdef BUILD_TESTING
+// =============================================================================
+// Test-Only Methods
+// =============================================================================
+
+/*
+ * Trigger authentication for testing
+ *
+ * This simulates polkit daemon calling initiateAuthentication().
+ * Only available when BUILD_TESTING is defined.
+ */
+void PolkitWrapper::testTriggerAuthentication(const QString &actionId,
+                                             const QString &message,
+                                             const QString &iconName,
+                                             const QString &cookie)
+{
+    // Create test identity (current user)
+    uid_t uid = getuid();
+    PolkitQt1::Identity identity = PolkitQt1::UnixUserIdentity(uid);
+    PolkitQt1::Identity::List identities;
+    identities << identity;
+
+    // Create empty details
+    PolkitQt1::Details details;
+
+    // For testing, we pass nullptr for AsyncResult
+    // The code must handle nullptr safely (it already does in most places)
+    PolkitQt1::Agent::AsyncResult *result = nullptr;
+
+    // Call protected initiateAuthentication method
+    initiateAuthentication(actionId, message, iconName, details, cookie, identities, result);
+}
+#endif
+
 // =============================================================================
 // Error Message Generation
 // =============================================================================

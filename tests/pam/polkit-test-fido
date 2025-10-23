@@ -1,0 +1,13 @@
+#%PAM-1.0
+# Mock PAM configuration for testing - FIDO/U2F authentication
+# Used by pam_wrapper to simulate security key authentication
+#
+# Simulates the behavior of pam_u2f:
+# 1. First prompt: silently checks for FIDO device (empty response)
+# 2. If no device, falls back to password
+
+# For testing, we use pam_permit but with special handling in tests
+auth     sufficient   pam_permit.so
+account  sufficient   pam_permit.so
+password sufficient   pam_permit.so
+session  sufficient   pam_permit.so
