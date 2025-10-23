@@ -290,21 +290,17 @@ test_authentication_state_integration() {
         return 1
     fi
 
-    # Set up PAM wrapper environment for testing
-    export PAM_WRAPPER=1
-    export PAM_WRAPPER_SERVICE_DIR="$WORKSPACE/tests/pam"
-
     # Enable E2E mode for FIDO tests - use real polkit authorization flow
     export POLKIT_E2E_MODE=1
 
-    # Find pam_wrapper library
-    PAM_WRAPPER_LIB=$(find /usr/lib64 /usr/lib -name "libpam_wrapper.so" 2>/dev/null | head -n1)
-    if [ -z "$PAM_WRAPPER_LIB" ]; then
-        log_warn "pam_wrapper library not found - tests may use system PAM"
-    else
-        export LD_PRELOAD="$PAM_WRAPPER_LIB"
-        log_info "Using PAM wrapper: $PAM_WRAPPER_LIB"
-    fi
+    # Set XDG_SESSION_ID so agent registers for the session, not specific PID
+    # This allows polkitd to route requests from any process in the session to our agent
+    export XDG_SESSION_ID="test-session-1"
+
+    # NOTE: We don't use pam_wrapper because:
+    # 1. It doesn't work with setuid binaries (polkit-agent-helper-1)
+    # 2. It breaks sudo which we need to run tests as testuser
+    # 3. We're using real PAM now for genuine E2E testing
 
     # Ensure pam_fido_mock.so is in the PAM service directory
     if [ -f "$BUILD_DIR/tests/pam/pam_fido_mock.so" ]; then
@@ -316,7 +312,13 @@ test_authentication_state_integration() {
     log_info "Running authentication state integration tests..."
     log_info "Environment: POLKIT_E2E_MODE=$POLKIT_E2E_MODE, PAM_WRAPPER=$PAM_WRAPPER"
 
-    if "$TEST_BIN" -v1 > "$TEST_RESULTS_DIR/auth-state-integration.log" 2>&1; then
+    # Run as testuser to force polkit authentication (root bypasses auth!)
+    # Make test results directory and build dir accessible by testuser
+    chmod 777 "$TEST_RESULTS_DIR"
+    chmod -R a+rX "$BUILD_DIR"
+
+    # Use sudo -u to preserve environment variables (su - resets them)
+    if sudo -u testuser -E bash -c "cd $BUILD_DIR/tests && ./test-authentication-state-integration -v1" > "$TEST_RESULTS_DIR/auth-state-integration.log" 2>&1; then
         # Parse QTest results
         QTEST_TOTALS=$(grep "^Totals:" "$TEST_RESULTS_DIR/auth-state-integration.log" || echo "")
         if [ -n "$QTEST_TOTALS" ]; then
@@ -387,6 +389,15 @@ main() {
     # Create test results directory
     mkdir -p "$TEST_RESULTS_DIR"
 
+    # Start D-Bus session bus for polkit agent registration
+    if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+        log_info "Starting D-Bus session bus..."
+        eval $(dbus-launch --sh-syntax)
+        export DBUS_SESSION_BUS_ADDRESS
+        export DBUS_SESSION_BUS_PID
+        log_info "D-Bus session bus started: $DBUS_SESSION_BUS_ADDRESS"
+    fi
+
     # Start D-Bus system bus if not running
     if [ ! -S /var/run/dbus/system_bus_socket ]; then
         log_info "Starting D-Bus system bus..."
@@ -417,8 +428,7 @@ main() {
         log_info "polkitd started (PID: $POLKITD_PID)"
     fi
 
-    # For testing: Remove setuid from polkit-agent-helper-1 so pam_wrapper can work
-    # (LD_PRELOAD is stripped for setuid binaries, preventing pam_wrapper from working)
+    # Verify polkit-agent-helper-1 has correct setuid permissions for real PAM authentication
     HELPER_PATH=""
     if [ -f /usr/lib/polkit-1/polkit-agent-helper-1 ]; then
         HELPER_PATH="/usr/lib/polkit-1/polkit-agent-helper-1"
@@ -429,11 +439,11 @@ main() {
     if [ -n "$HELPER_PATH" ]; then
         HELPER_PERMS=$(stat -c "%a" "$HELPER_PATH")
         if [ "$HELPER_PERMS" = "4755" ]; then
-            log_info "Removing setuid from polkit-agent-helper-1 to enable pam_wrapper for testing"
-            chmod 0755 "$HELPER_PATH"
-            log_info "polkit-agent-helper-1 configured for testing (setuid removed)"
+            log_info "polkit-agent-helper-1 has correct setuid permissions (4755)"
         else
-            log_info "polkit-agent-helper-1 already not setuid (perms: $HELPER_PERMS)"
+            log_warn "polkit-agent-helper-1 permissions incorrect: $HELPER_PERMS (expected 4755)"
+            log_warn "Attempting to restore setuid bit..."
+            chmod 4755 "$HELPER_PATH"
         fi
     fi
 

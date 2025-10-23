@@ -50,7 +50,21 @@ RUN mkdir -p build && \
     if [ -f tests/pam/pam_fido_mock.so ]; then \
         cp tests/pam/pam_fido_mock.so /usr/lib64/security/ ; \
         echo "Installed pam_fido_mock.so for FIDO testing" ; \
-    fi
+    fi && \
+    # Create PAM configuration for polkit-1 with FIDO mock \
+    echo '#%PAM-1.0' > /etc/pam.d/polkit-1 && \
+    echo '# PAM configuration for polkit-1 with FIDO mock for testing' >> /etc/pam.d/polkit-1 && \
+    echo '' >> /etc/pam.d/polkit-1 && \
+    echo '# Try FIDO authentication first (mock module for testing)' >> /etc/pam.d/polkit-1 && \
+    echo 'auth    sufficient    pam_fido_mock.so' >> /etc/pam.d/polkit-1 && \
+    echo '' >> /etc/pam.d/polkit-1 && \
+    echo '# Fallback to standard Unix authentication' >> /etc/pam.d/polkit-1 && \
+    echo 'auth    include    system-auth' >> /etc/pam.d/polkit-1 && \
+    echo 'account include    system-auth' >> /etc/pam.d/polkit-1 && \
+    echo 'password include    system-auth' >> /etc/pam.d/polkit-1 && \
+    echo 'session include    system-auth' >> /etc/pam.d/polkit-1 && \
+    cat /etc/pam.d/polkit-1 && \
+    echo "Created PAM configuration for polkit-1"
 
 # Set up polkit authentication helper to be setuid root
 # This is required for PAM authentication to work
