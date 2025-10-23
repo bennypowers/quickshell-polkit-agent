@@ -509,6 +509,14 @@ QString PolkitWrapper::transformAuthMessage(const QString &actionId, const QStri
 
 bool PolkitWrapper::detectNfcReader()
 {
+    // Allow mocking NFC reader presence for testing
+    QByteArray mockNfc = qgetenv("MOCK_NFC_READER");
+    if (!mockNfc.isEmpty()) {
+        bool mockPresent = (mockNfc == "1" || mockNfc.toLower() == "true");
+        qCDebug(polkitAgent) << "NFC reader detection: Mocked" << (mockPresent ? "present" : "absent");
+        return mockPresent;
+    }
+
     QProcess lsusb;
     lsusb.start("lsusb");
 

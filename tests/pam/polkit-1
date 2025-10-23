@@ -8,13 +8,21 @@
 #   export PAM_WRAPPER=1
 #   export PAM_WRAPPER_SERVICE_DIR=/path/to/tests/pam
 #   export LD_PRELOAD=/path/to/libpam_wrapper.so
+#
+# For FIDO mock testing:
+#   export MOCK_NFC_READER=1 (to simulate NFC reader presence)
+#   export FIDO_TEST_MODE=success|timeout|fail|unavailable
+#   export FIDO_TEST_DELAY=<ms> (optional, default 1000)
 
-# Authentication phase - test with pam_permit (always succeeds)
-# In real system, this would be pam_unix.so for password auth
-# For FIDO testing, would be pam_u2f.so
+# Try FIDO authentication first (if pam_fido_mock.so is available)
+# This will check FIDO_TEST_MODE environment variable
+# -auth        sufficient    pam_fido_mock.so
+
+# Fallback to always-succeed for basic testing
+# Comment out the line above and use this for non-FIDO tests
 auth        required      pam_permit.so
 
-# Account management - check if account is valid
+# Account management
 account     required      pam_permit.so
 
 # Password management - not used for polkit auth
