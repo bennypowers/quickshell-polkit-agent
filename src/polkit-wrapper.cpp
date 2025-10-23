@@ -32,7 +32,10 @@ PolkitWrapper::PolkitWrapper(INfcDetector *nfcDetector, QObject *parent)
     , m_nfcDetector(nfcDetector)
     , m_ownDetector(false)
 {
-    // If no detector provided, create default UsbNfcDetector
+    // NFC detector is passive/informational only - it does NOT control authentication flow.
+    // The agent operates PAM-reactively: it displays whatever PAM asks for.
+    // FIDO authentication is handled entirely by PAM (via pam_u2f if configured).
+    // The detector is kept as a dependency injection seam for testing.
     if (!m_nfcDetector) {
         m_nfcDetector = new UsbNfcDetector();
         m_ownDetector = true;

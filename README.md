@@ -10,7 +10,7 @@ A custom polkit authentication agent that provides beautiful, custom authenticat
 
 ## Features
 
-- **FIDO2/WebAuthn Support**: Security keys (YubiKey, etc.) with automatic detection and password fallback
+- **FIDO2/WebAuthn Support**: Works with PAM-configured security keys (YubiKey, etc.) via `pam_u2f`. The agent responds reactively to PAM prompts without managing FIDO flows directly, following the standard polkit agent pattern.
 - **Custom Authentication UI**: Beautiful themed dialogs integrated with AccountsService for user data
 - **Secure Communication**: Unix domain socket IPC with PolkitQt1 session management
 - **System Integration**: Registers as the system polkit agent for all authentication requests
