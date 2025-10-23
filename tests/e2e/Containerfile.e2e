@@ -14,6 +14,8 @@ RUN dnf install -y \
     polkit \
     pam-devel \
     pam_wrapper \
+    libpamtest \
+    libpamtest-devel \
     dbus-daemon \
     dbus-x11 \
     python3 \
