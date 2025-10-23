@@ -52,6 +52,16 @@ RUN mkdir -p build && \
         echo "Installed pam_fido_mock.so for FIDO testing" ; \
     fi
 
+# Set up polkit authentication helper to be setuid root
+# This is required for PAM authentication to work
+RUN if [ -f /usr/lib/polkit-1/polkit-agent-helper-1 ]; then \
+        chmod 4755 /usr/lib/polkit-1/polkit-agent-helper-1 ; \
+        echo "Set polkit-agent-helper-1 as setuid root" ; \
+    elif [ -f /usr/libexec/polkit-1/polkit-agent-helper-1 ]; then \
+        chmod 4755 /usr/libexec/polkit-1/polkit-agent-helper-1 ; \
+        echo "Set polkit-agent-helper-1 as setuid root (libexec)" ; \
+    fi
+
 # Start dbus-daemon as part of container startup
 # Tests will run as testuser with dbus session
 CMD ["/bin/bash"]
