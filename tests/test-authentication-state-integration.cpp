@@ -10,6 +10,7 @@
 #include <QTest>
 #include <QSignalSpy>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QProcess>
 #include <polkitqt1-authority.h>
 #include <polkitqt1-subject.h>
@@ -844,7 +845,7 @@ void TestAuthenticationStateIntegration::testRecoveryAfterSessionError()
     QString cookie1 = "cookie-session-error";
     QString cookie2 = "cookie-after-session-error";
 
-    QSignalSpy errorSpy(m_wrapper, &PolkitWrapper::authenticationError);
+    QSignalSpy errorSpy(m_wrapper, &PolkitWrapper::authorizationError);
     QSignalSpy resultSpy(m_wrapper, &PolkitWrapper::authorizationResult);
 
     // Trigger auth
