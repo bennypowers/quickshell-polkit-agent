@@ -1,0 +1,8 @@
+#%PAM-1.0
+# Mock PAM configuration for testing - always succeeds
+# Used by pam_wrapper to simulate successful authentication
+
+auth     sufficient   pam_permit.so
+account  sufficient   pam_permit.so
+password sufficient   pam_permit.so
+session  sufficient   pam_permit.so

@@ -14,125 +14,39 @@ env:
   BUILD_TESTS: ON
 
 jobs:
-  security-tests:
-    name: Security Tests
+  unit-tests:
+    name: Unit Tests (CTest)
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Install Podman
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y podman
+
     - name: Build container
       run: |
-        docker build -t quickshell-polkit-test -f Containerfile .
+        podman build -f Containerfile -t quickshell-polkit-test .
 
-    - name: Build application
+    - name: Build and run unit tests
       run: |
-        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
-          mkdir -p build-security &&
-          cd build-security &&
+        podman run --rm -v "$PWD:/workspace:Z" quickshell-polkit-test bash -c "
+          mkdir -p build
+          cd build
           cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug
+          make -j\$(nproc)
+          ctest --output-on-failure
         "
 
-    - name: Run existing unit tests
-      run: |
-        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
-          cd build-security &&
-          make test-message-validator test-security test-simple-integration &&
-          ctest --output-on-failure --tests-regex '(MessageValidator|SecurityManager|SimpleIntegration)'
-        "
-
-    - name: Run security fuzzing tests
-      id: fuzzing
-      run: |
-        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
-          python3 tests/security/fuzz_ipc_socket.py
-        "
-
-    - name: Run permission manipulation tests
-      id: permissions
-      run: |
-        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
-          python3 tests/security/test_permissions.py
-        "
-
-    - name: Run replay/race condition tests
-      id: replay
-      run: |
-        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
-          python3 tests/security/test_replay_attacks.py
-        "
-
-    - name: Run rate limiting tests
-      id: ratelimit
-      run: |
-        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
-          python3 tests/security/test_rate_limiting.py
-        "
-
-    - name: Run audit log tests
-      id: auditlog
-      run: |
-        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
-          python3 tests/security/test_audit_logging.py
-        "
-
-    - name: Run UI confusion tests
-      id: ui
-      run: |
-        docker run --rm -v $PWD:/workspace quickshell-polkit-test bash -c "
-          python3 tests/security/test_ui_confusion.py
-        "
-
-    - name: Upload security test results
+    - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: security-test-results
-        path: |
-          tests/security/reports/
-          build-security/test-results/
-
-    - name: Security test summary
-      if: always()
-      run: |
-        echo "## Security Test Summary" >> $GITHUB_STEP_SUMMARY
-
-        if [ ${{ steps.fuzzing.outcome }} == "success" ]; then
-          echo "- ✅ IPC Socket Fuzzing" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "- ❌ IPC Socket Fuzzing" >> $GITHUB_STEP_SUMMARY
-        fi
-
-        if [ ${{ steps.permissions.outcome }} == "success" ]; then
-          echo "- ✅ Permission Manipulation Tests" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "- ❌ Permission Manipulation Tests" >> $GITHUB_STEP_SUMMARY
-        fi
-
-        if [ ${{ steps.replay.outcome }} == "success" ]; then
-          echo "- ✅ Replay/Race Condition Tests" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "- ❌ Replay/Race Condition Tests" >> $GITHUB_STEP_SUMMARY
-        fi
-
-        if [ ${{ steps.ratelimit.outcome }} == "success" ]; then
-          echo "- ✅ Rate Limiting Tests" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "- ❌ Rate Limiting Tests" >> $GITHUB_STEP_SUMMARY
-        fi
-
-        if [ ${{ steps.auditlog.outcome }} == "success" ]; then
-          echo "- ✅ Audit Log Tests" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "- ❌ Audit Log Tests" >> $GITHUB_STEP_SUMMARY
-        fi
-
-        if [ ${{ steps.ui.outcome }} == "success" ]; then
-          echo "- ✅ UI Confusion Tests" >> $GITHUB_STEP_SUMMARY
-        else
-          echo "- ❌ UI Confusion Tests" >> $GITHUB_STEP_SUMMARY
-        fi
+        name: unit-test-results
+        path: build/Testing/
 
   static-analysis:
     name: Static Security Analysis
@@ -173,3 +87,39 @@ jobs:
         name: static-analysis-results
         path: |
           cppcheck-results.xml
+
+  container-tests:
+    name: All Tests (Container)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Podman
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y podman
+
+    - name: Build and run all tests in container
+      id: container_tests
+      run: |
+        ./tests/e2e/run-podman-e2e.sh
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: container-test-results
+        path: |
+          tests/e2e/test-results/
+
+    - name: Test summary
+      if: always()
+      run: |
+        echo "## Container Test Summary" >> "$GITHUB_STEP_SUMMARY"
+        if [ "${{ steps.container_tests.outcome }}" == "success" ]; then
+          echo "- ✅ All tests passed in container" >> "$GITHUB_STEP_SUMMARY"
+        else
+          echo "- ❌ Container tests failed" >> "$GITHUB_STEP_SUMMARY"
+        fi

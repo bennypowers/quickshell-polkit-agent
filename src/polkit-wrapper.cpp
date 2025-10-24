@@ -26,10 +26,21 @@
 #include <QTimer>
 #include <unistd.h>
 
-PolkitWrapper::PolkitWrapper(QObject *parent)
+PolkitWrapper::PolkitWrapper(INfcDetector *nfcDetector, QObject *parent)
     : PolkitQt1::Agent::Listener(parent)
     , m_authority(PolkitQt1::Authority::instance())
+    , m_nfcDetector(nfcDetector)
+    , m_ownDetector(false)
 {
+    // NFC detector is passive/informational only - it does NOT control authentication flow.
+    // The agent operates PAM-reactively: it displays whatever PAM asks for.
+    // FIDO authentication is handled entirely by PAM (via pam_u2f if configured).
+    // The detector is kept as a dependency injection seam for testing.
+    if (!m_nfcDetector) {
+        m_nfcDetector = new UsbNfcDetector();
+        m_ownDetector = true;
+    }
+
     // Connect authority signals
     connect(m_authority, &PolkitQt1::Authority::checkAuthorizationFinished,
             this, &PolkitWrapper::onCheckAuthorizationFinished);
@@ -38,24 +49,26 @@ PolkitWrapper::PolkitWrapper(QObject *parent)
 PolkitWrapper::~PolkitWrapper()
 {
     unregisterAgent();
+
+    // Clean up detector if we own it
+    if (m_ownDetector && m_nfcDetector) {
+        delete m_nfcDetector;
+    }
 }
 
 bool PolkitWrapper::registerAgent()
 {
     // Create subject for current session
     QString sessionId = qgetenv("XDG_SESSION_ID");
-    PolkitQt1::Subject subject;
-    
-    if (!sessionId.isEmpty()) {
-        subject = PolkitQt1::UnixSessionSubject(sessionId);
-        qCDebug(polkitAgent) << "Using session subject for session:" << sessionId;
-    } else {
-        subject = PolkitQt1::UnixProcessSubject(getpid());
-        qCDebug(polkitAgent) << "Using process subject for PID:" << getpid();
-    }
 
-    // Register as polkit agent
-    bool success = registerListener(subject, "/quickshell/polkit/agent");
+    bool success;
+    if (!sessionId.isEmpty()) {
+        qCDebug(polkitAgent) << "Using session subject for session:" << sessionId;
+        success = registerListener(PolkitQt1::UnixSessionSubject(sessionId), "/quickshell/polkit/agent");
+    } else {
+        qCDebug(polkitAgent) << "Using process subject for PID:" << getpid();
+        success = registerListener(PolkitQt1::UnixProcessSubject(getpid()), "/quickshell/polkit/agent");
+    }
 
     if (success) {
         qCDebug(polkitAgent) << "Successfully registered as polkit agent";
@@ -92,25 +105,20 @@ void PolkitWrapper::checkAuthorization(const QString &actionId, const QString &d
 void PolkitWrapper::cancelAuthorization()
 {
     qCDebug(polkitAgent) << "Cancelling authorization check";
-    
-    // Cancel any active polkit sessions
-    for (auto it = m_activePolkitSessions.begin(); it != m_activePolkitSessions.end(); ++it) {
-        qCDebug(polkitSensitive) << "Cancelling active session for cookie:" << it.key();
-        it.value()->cancel();
-        it.value()->deleteLater();
-    }
-    m_activePolkitSessions.clear();
-    
+
     // Cancel the authority check
     m_authority->checkAuthorizationCancel();
-    
-    // Complete any pending results
-    for (auto it = m_activeSessions.begin(); it != m_activeSessions.end(); ++it) {
-        it.value()->setError("Cancelled by user");
-        it.value()->setCompleted();
+
+    // Cancel all active sessions using unified cleanup
+    QStringList cookiesToCleanup = m_sessions.keys();
+    for (const QString &cookie : cookiesToCleanup) {
+        SessionState *session = getSession(cookie);
+        if (session) {
+            setState(cookie, AuthenticationState::CANCELLED);
+            cleanupSession(cookie);
+        }
     }
-    m_activeSessions.clear();
-    
+
     emit authorizationResult(false, m_currentActionId);
 }
 
@@ -149,87 +157,183 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
 {
     qCDebug(polkitAgent) << "initiateAuthentication for" << actionId;
     qCDebug(polkitSensitive) << "initiateAuthentication cookie:" << cookie;
-    
-    // Store the result for this session
-    m_activeSessions[cookie] = result;
-    
+
+    // Create new session state
+    SessionState sessionState;
+    sessionState.cookie = cookie;
+    sessionState.actionId = actionId;
+    sessionState.result = result;
+    sessionState.state = AuthenticationState::IDLE;
+    m_sessions[cookie] = sessionState;
+
+    // Set initial state
+    setState(cookie, AuthenticationState::INITIATED);
+
     // Create polkit session for the first identity
     if (!identities.isEmpty()) {
         PolkitQt1::Identity identity = identities.first();
         qCDebug(polkitAgent) << "Creating session for identity:" << identity.toString();
-        
-        PolkitQt1::Agent::Session *session = new PolkitQt1::Agent::Session(identity, cookie);
-        m_activePolkitSessions[cookie] = session;
+
+        PolkitQt1::Agent::Session *pamSession = new PolkitQt1::Agent::Session(identity, cookie);
+
+        // Store PAM session in our SessionState
+        SessionState *state = getSession(cookie);
+        if (state) {
+            state->session = pamSession;
+        }
         
         // Connect session signals
-        connect(session, &PolkitQt1::Agent::Session::completed,
+        connect(pamSession, &PolkitQt1::Agent::Session::completed,
                 this, [this, cookie, actionId](bool gainedAuthorization) {
                     qCDebug(polkitAgent) << "Polkit session completed, authorized:" << gainedAuthorization;
                     qCDebug(polkitSensitive) << "Session cookie:" << cookie;
-                    
-                    // Complete the AsyncResult for polkit daemon
-                    auto resultIt = m_activeSessions.find(cookie);
-                    if (resultIt != m_activeSessions.end()) {
-                        if (gainedAuthorization) {
-                            resultIt.value()->setCompleted();
+
+                    // Get session once and reuse to avoid use-after-free
+                    SessionState *session = getSession(cookie);
+                    if (!session) {
+                        qCWarning(polkitAgent) << "Session not found in completed handler for cookie:" << cookie;
+                        return;
+                    }
+
+                    // Update state and handle retry logic
+                    if (gainedAuthorization) {
+                        setState(cookie, AuthenticationState::COMPLETED);
+                    } else {
+                        session->retryCount++;
+                        qCDebug(polkitAgent) << "Authentication failed, retry count:" << session->retryCount
+                                             << "/" << MAX_AUTH_RETRIES;
+
+                        if (session->retryCount >= MAX_AUTH_RETRIES) {
+                            qCWarning(polkitAgent) << "Maximum authentication attempts reached for" << cookie;
+                            setState(cookie, AuthenticationState::MAX_RETRIES_EXCEEDED);
+
+                            // Emit error with default message
+                            QString defaultMsg = getDefaultErrorMessage(AuthenticationState::MAX_RETRIES_EXCEEDED, session->method);
+                            emit authenticationError(cookie, AuthenticationState::MAX_RETRIES_EXCEEDED,
+                                                    session->method, defaultMsg,
+                                                    QString("Retry count: %1/%2").arg(session->retryCount).arg(MAX_AUTH_RETRIES));
                         } else {
-                            resultIt.value()->setError("Authentication failed");
-                            resultIt.value()->setCompleted();
+                            setState(cookie, AuthenticationState::AUTHENTICATION_FAILED);
+
+                            // Emit error with default message
+                            QString defaultMsg = getDefaultErrorMessage(AuthenticationState::AUTHENTICATION_FAILED, session->method);
+                            emit authenticationError(cookie, AuthenticationState::AUTHENTICATION_FAILED,
+                                                    session->method, defaultMsg,
+                                                    QString("Retry count: %1/%2").arg(session->retryCount).arg(MAX_AUTH_RETRIES));
                         }
-                        m_activeSessions.erase(resultIt);
                     }
-                    
-                    // Clean up session
-                    auto sessionIt = m_activePolkitSessions.find(cookie);
-                    if (sessionIt != m_activePolkitSessions.end()) {
-                        sessionIt.value()->deleteLater();
-                        m_activePolkitSessions.erase(sessionIt);
+
+                    // Determine cleanup strategy before completing AsyncResult
+                    // (completing result may trigger polkit cleanup)
+                    bool hasAsyncResult = (session->result != nullptr);
+                    bool shouldCleanup = gainedAuthorization ||
+                                        session->state == AuthenticationState::MAX_RETRIES_EXCEEDED ||
+                                        hasAsyncResult;
+
+                    // Complete the AsyncResult for polkit daemon
+                    // IMPORTANT: Do this AFTER determining cleanup strategy but BEFORE cleanup
+                    if (session->result) {
+                        if (gainedAuthorization) {
+                            session->result->setCompleted();
+                        } else {
+                            session->result->setError("Authentication failed");
+                            session->result->setCompleted();
+                        }
                     }
-                    
+
                     emit authorizationResult(gainedAuthorization, actionId);
+
+                    // Clean up or restart session
+                    if (shouldCleanup) {
+                        cleanupSession(cookie);
+                    } else {
+                        // Test harness mode: restart PAM session for retry
+                        qCDebug(polkitAgent) << "Restarting PAM session for retry (test harness mode)";
+
+                        // Transition back to WAITING_FOR_PASSWORD to allow retry
+                        setState(cookie, AuthenticationState::WAITING_FOR_PASSWORD);
+
+                        // NOTE: We keep the existing session and just call initiate() again
+                        // The session will reconnect and PAM will prompt for password again
+                        if (session->session) {
+                            session->session->initiate();
+                        }
+                    }
                 });
-        
-        connect(session, &PolkitQt1::Agent::Session::request,
+
+        connect(pamSession, &PolkitQt1::Agent::Session::request,
                 this, [this, cookie, actionId](const QString &request, bool echo) {
-                    qCDebug(polkitAgent) << "Session password request";
-                    qCDebug(polkitSensitive) << "Password request for cookie:" << cookie;
+                    qCDebug(polkitAgent) << "Session request:" << request << "echo:" << echo;
+                    qCDebug(polkitSensitive) << "Request for cookie:" << cookie;
+
+                    SessionState *session = getSession(cookie);
+                    if (!session || !session->session) {
+                        qCWarning(polkitAgent) << "Session not found for cookie in request handler";
+                        return;
+                    }
+
+                    // Enforce max retries - refuse to continue if exceeded
+                    if (session->state == AuthenticationState::MAX_RETRIES_EXCEEDED) {
+                        qCWarning(polkitAgent) << "Ignoring PAM request - max retries exceeded for" << cookie;
+                        // Don't respond to PAM - this will cause the session to fail
+                        return;
+                    }
+
+                    // Show password prompt and wait for user input
+                    // PAM will handle FIDO (pam_u2f) if configured - we just respond to prompts
+                    // User can submit empty response if they want to use FIDO
+                    qCDebug(polkitAgent) << "Password request from PAM";
+                    setState(cookie, AuthenticationState::WAITING_FOR_PASSWORD);
+                    setMethod(cookie, AuthenticationMethod::PASSWORD);
                     emit showPasswordRequest(actionId, request, echo, cookie);
                 });
-        
-        connect(session, &PolkitQt1::Agent::Session::showError,
+
+        connect(pamSession, &PolkitQt1::Agent::Session::showError,
                 this, [this, cookie, actionId](const QString &text) {
                     qCWarning(polkitAgent) << "Session error:" << text;
                     qCDebug(polkitSensitive) << "Session error for cookie:" << cookie;
-                    
-                    // Complete the AsyncResult with error
-                    auto resultIt = m_activeSessions.find(cookie);
-                    if (resultIt != m_activeSessions.end()) {
-                        resultIt.value()->setError(QString("Session error: %1").arg(text));
-                        resultIt.value()->setCompleted();
-                        m_activeSessions.erase(resultIt);
+
+                    setState(cookie, AuthenticationState::ERROR);
+
+                    SessionState *session = getSession(cookie);
+                    if (session) {
+                        // Emit error with default message
+                        QString defaultMsg = getDefaultErrorMessage(AuthenticationState::ERROR, session->method);
+                        emit authenticationError(cookie, AuthenticationState::ERROR,
+                                                session->method, defaultMsg, text);
+
+                        if (session->result) {
+                            session->result->setError(QString("Session error: %1").arg(text));
+                            session->result->setCompleted();
+                        }
                     }
-                    
-                    // Clean up session on error
-                    auto sessionIt = m_activePolkitSessions.find(cookie);
-                    if (sessionIt != m_activePolkitSessions.end()) {
-                        sessionIt.value()->deleteLater();
-                        m_activePolkitSessions.erase(sessionIt);
-                    }
-                    
+
                     emit authorizationResult(false, actionId);
+
+                    cleanupSession(cookie);
                 });
-        
-        connect(session, &PolkitQt1::Agent::Session::showInfo,
+
+        connect(pamSession, &PolkitQt1::Agent::Session::showInfo,
                 this, [this, cookie](const QString &text) {
                     qCDebug(polkitAgent) << "Session info:" << text;
                 });
-        
-        // Session created but not initiated yet - wait for user action
+
+        /*
+         * Initiate PAM session immediately (GDM pattern)
+         *
+         * GDM calls pam_authenticate() right away, and the PAM conversation
+         * starts. PAM will call our request() handler when it needs input.
+         *
+         * See: https://gitlab.gnome.org/GNOME/gdm/-/blob/main/daemon/gdm-session-worker.c:1342
+         * SPDX-License-Identifier: GPL-2.0-or-later (for GDM reference pattern)
+         */
+        qCDebug(polkitAgent) << "Starting PAM authentication session for" << cookie;
+        pamSession->initiate();
     }
-    
+
     // Transform message for user-friendly text
     QString transformedMessage = transformAuthMessage(actionId, message, details);
-    
+
     // Show auth dialog
     emit showAuthDialog(actionId, transformedMessage, iconName, cookie);
 }
@@ -245,38 +349,56 @@ bool PolkitWrapper::initiateAuthenticationFinish()
 
 void PolkitWrapper::cancelAuthentication()
 {
-    qCDebug(polkitAgent) << "Polkit agent: authentication cancelled";
-    
-    // Cancel all active sessions
-    for (auto it = m_activeSessions.begin(); it != m_activeSessions.end(); ++it) {
-        it.value()->setError("Authentication cancelled");
-        it.value()->setCompleted();
+    qCDebug(polkitAgent) << "Polkit agent: authentication cancelled (Listener interface)";
+
+    // Cancel all active sessions using unified cleanup
+    QStringList cookiesToCleanup = m_sessions.keys();
+    for (const QString &cookie : cookiesToCleanup) {
+        setState(cookie, AuthenticationState::CANCELLED);
+        cleanupSession(cookie);
     }
-    m_activeSessions.clear();
 }
 
 void PolkitWrapper::submitAuthenticationResponse(const QString &cookie, const QString &response)
 {
-    auto sessionIt = m_activePolkitSessions.find(cookie);
-    if (sessionIt == m_activePolkitSessions.end()) {
+    SessionState *session = getSession(cookie);
+    if (!session || !session->session) {
         qCWarning(polkitAgent) << "No active polkit session found";
         qCDebug(polkitSensitive) << "Missing session for cookie:" << cookie;
         return;
     }
-    
-    PolkitQt1::Agent::Session *session = sessionIt.value();
-    
-    if (response.isEmpty()) {
-        // Empty response means start FIDO authentication
-        qCDebug(polkitAgent) << "Starting FIDO authentication";
-        qCDebug(polkitSensitive) << "FIDO auth for cookie:" << cookie;
-        session->initiate();
-    } else {
-        // Password authentication - just submit response to existing session
-        qCDebug(polkitAgent) << "Submitting password response";
-        qCDebug(polkitSensitive) << "Password response for cookie:" << cookie;
-        session->setResponse(response);
+
+    /*
+     * Enforce max retries - prevent faillocks
+     *
+     * If user has failed too many times, refuse to accept more attempts.
+     * This prevents PAM from locking the account.
+     */
+    if (session->state == AuthenticationState::MAX_RETRIES_EXCEEDED) {
+        qCWarning(polkitAgent) << "Rejecting authentication response - max retries exceeded";
+        qCDebug(polkitSensitive) << "Rejected cookie:" << cookie;
+
+        // Emit comprehensive error signal
+        QString defaultMsg = getDefaultErrorMessage(AuthenticationState::MAX_RETRIES_EXCEEDED, session->method);
+        emit authenticationError(cookie, AuthenticationState::MAX_RETRIES_EXCEEDED,
+                                session->method, defaultMsg,
+                                "User attempted to submit response after max retries");
+        return;
     }
+
+    /*
+     * Submit user response to PAM
+     *
+     * Note: We no longer call initiate() here - that happens in
+     * initiateAuthentication() following GDM's pattern. This method
+     * just submits the user's response to an already-running PAM conversation.
+     */
+    qCDebug(polkitAgent) << "Submitting authentication response";
+    qCDebug(polkitSensitive) << "Response for cookie:" << cookie;
+
+    setState(cookie, AuthenticationState::AUTHENTICATING);
+    setMethod(cookie, AuthenticationMethod::PASSWORD);
+    session->session->setResponse(response);
 }
 
 QString PolkitWrapper::transformAuthMessage(const QString &actionId, const QString &message, const PolkitQt1::Details &details)
@@ -390,4 +512,292 @@ QString PolkitWrapper::transformAuthMessage(const QString &actionId, const QStri
     return message;
 }
 
+// =============================================================================
+// State Machine Implementation
+// =============================================================================
+
+/*
+ * Get session state by cookie
+ *
+ * Pattern inspired by GDM's find_conversation_by_name
+ * See: https://gitlab.gnome.org/GNOME/gdm/-/blob/main/daemon/gdm-session.c
+ */
+SessionState* PolkitWrapper::getSession(const QString &cookie)
+{
+    auto it = m_sessions.find(cookie);
+    if (it != m_sessions.end()) {
+        return &it.value();
+    }
+    return nullptr;
+}
+
+const SessionState* PolkitWrapper::getSession(const QString &cookie) const
+{
+    auto it = m_sessions.find(cookie);
+    if (it != m_sessions.end()) {
+        return &it.value();
+    }
+    return nullptr;
+}
+
+/*
+ * Set authentication state for a session
+ *
+ * Pattern inspired by GDM's gdm_session_worker_set_state
+ * See: https://gitlab.gnome.org/GNOME/gdm/-/blob/main/daemon/gdm-session-worker.c
+ */
+void PolkitWrapper::setState(const QString &cookie, AuthenticationState newState)
+{
+    SessionState *session = getSession(cookie);
+    if (!session) {
+        qCWarning(polkitAgent) << "Attempted to set state for non-existent session:" << cookie;
+        return;
+    }
+
+    AuthenticationState oldState = session->state;
+    if (oldState == newState) {
+        return;  // No change
+    }
+
+    session->state = newState;
+    qCDebug(polkitAgent) << "State transition for" << cookie << ":"
+                         << stateToString(oldState) << "→" << stateToString(newState);
+
+    emit authenticationStateChanged(cookie, newState);
+}
+
+/*
+ * Set authentication method for a session
+ */
+void PolkitWrapper::setMethod(const QString &cookie, AuthenticationMethod method)
+{
+    SessionState *session = getSession(cookie);
+    if (!session) {
+        qCWarning(polkitAgent) << "Attempted to set method for non-existent session:" << cookie;
+        return;
+    }
+
+    AuthenticationMethod oldMethod = session->method;
+    if (oldMethod == method) {
+        return;  // No change
+    }
+
+    session->method = method;
+    qCDebug(polkitAgent) << "Method changed for" << cookie << ":"
+                         << methodToString(oldMethod) << "→" << methodToString(method);
+
+    emit authenticationMethodChanged(cookie, method);
+}
+
+/*
+ * Cleanup session resources
+ *
+ * Unified cleanup pattern inspired by GDM's free_conversation
+ * See: https://gitlab.gnome.org/GNOME/gdm/-/blob/main/daemon/gdm-session.c
+ */
+void PolkitWrapper::cleanupSession(const QString &cookie)
+{
+    SessionState *session = getSession(cookie);
+    if (!session) {
+        return;  // Already cleaned up
+    }
+
+    qCDebug(polkitAgent) << "Cleaning up session:" << cookie
+                         << "in state:" << stateToString(session->state);
+
+    // Complete async result if still pending - do this FIRST
+    // to signal polkit daemon before we cancel the PAM session
+    if (session->result) {
+        // Only complete if not already completed
+        if (session->state != AuthenticationState::COMPLETED) {
+            session->result->setError("Session cleaned up");
+            session->result->setCompleted();
+        }
+        session->result = nullptr;
+    }
+
+    // Clean up PAM session AFTER completing result
+    if (session->session) {
+        // Disconnect all signals to prevent race conditions with queued signals
+        disconnect(session->session, nullptr, this, nullptr);
+        session->session->cancel();
+        session->session->deleteLater();
+        session->session = nullptr;
+    }
+
+    // Remove from map
+    m_sessions.remove(cookie);
+
+    qCDebug(polkitAgent) << "Session cleanup complete for:" << cookie;
+}
+
+// =============================================================================
+// State Inspection Methods
+// =============================================================================
+
+AuthenticationState PolkitWrapper::authenticationState(const QString &cookie) const
+{
+    if (cookie.isEmpty()) {
+        // Return global state (first active session or IDLE)
+        if (m_sessions.isEmpty()) {
+            return AuthenticationState::IDLE;
+        }
+        return m_sessions.first().state;
+    }
+
+    const SessionState *session = getSession(cookie);
+    return session ? session->state : AuthenticationState::IDLE;
+}
+
+AuthenticationMethod PolkitWrapper::authenticationMethod(const QString &cookie) const
+{
+    const SessionState *session = getSession(cookie);
+    return session ? session->method : AuthenticationMethod::NONE;
+}
+
+bool PolkitWrapper::hasActiveSessions() const
+{
+    return !m_sessions.isEmpty();
+}
+
+int PolkitWrapper::sessionRetryCount(const QString &cookie) const
+{
+    const SessionState *session = getSession(cookie);
+    return session ? session->retryCount : 0;
+}
+
+// =============================================================================
+// Helper Methods
+// =============================================================================
+
+QString PolkitWrapper::stateToString(AuthenticationState state) const
+{
+    switch (state) {
+    case AuthenticationState::IDLE: return "IDLE";
+    case AuthenticationState::INITIATED: return "INITIATED";
+    case AuthenticationState::WAITING_FOR_PASSWORD: return "WAITING_FOR_PASSWORD";
+    case AuthenticationState::AUTHENTICATING: return "AUTHENTICATING";
+    case AuthenticationState::AUTHENTICATION_FAILED: return "AUTHENTICATION_FAILED";
+    case AuthenticationState::MAX_RETRIES_EXCEEDED: return "MAX_RETRIES_EXCEEDED";
+    case AuthenticationState::COMPLETED: return "COMPLETED";
+    case AuthenticationState::CANCELLED: return "CANCELLED";
+    case AuthenticationState::ERROR: return "ERROR";
+    }
+    return "UNKNOWN";
+}
+
+QString PolkitWrapper::methodToString(AuthenticationMethod method) const
+{
+    switch (method) {
+    case AuthenticationMethod::NONE: return "NONE";
+    case AuthenticationMethod::FIDO: return "FIDO";
+    case AuthenticationMethod::PASSWORD: return "PASSWORD";
+    }
+    return "UNKNOWN";
+}
+
+#ifdef BUILD_TESTING
+// =============================================================================
+// Test-Only Methods
+// =============================================================================
+
+/*
+ * Trigger authentication for testing
+ *
+ * This simulates polkit daemon calling initiateAuthentication().
+ * Only available when BUILD_TESTING is defined.
+ */
+void PolkitWrapper::testTriggerAuthentication(const QString &actionId,
+                                             const QString &message,
+                                             const QString &iconName,
+                                             const QString &cookie)
+{
+    // Create test identity (current user)
+    uid_t uid = getuid();
+    PolkitQt1::Identity identity = PolkitQt1::UnixUserIdentity(uid);
+    PolkitQt1::Identity::List identities;
+    identities << identity;
+
+    // Create empty details
+    PolkitQt1::Details details;
+
+    // For testing, we pass nullptr for AsyncResult
+    // The code must handle nullptr safely (it already does in most places)
+    PolkitQt1::Agent::AsyncResult *result = nullptr;
+
+    // Call protected initiateAuthentication method
+    initiateAuthentication(actionId, message, iconName, details, cookie, identities, result);
+}
+
+void PolkitWrapper::testCompleteSession(const QString &cookie, bool success)
+{
+    SessionState *session = getSession(cookie);
+    if (!session || !session->session) {
+        qCWarning(polkitAgent) << "testCompleteSession: No session found for cookie:" << cookie;
+        return;
+    }
+
+    qCDebug(polkitAgent) << "testCompleteSession: Manually completing session for" << cookie
+                         << "with success =" << success;
+
+    // Manually emit the completed signal
+    // This triggers all the same logic as real PAM completion:
+    // - Retry count increment
+    // - State transitions
+    // - Session restart or cleanup
+    emit session->session->completed(success);
+}
+#endif
+
+// =============================================================================
+// Error Message Generation
+// =============================================================================
+
+/*
+ * Get default user-friendly error message
+ *
+ * Inspired by GDM's get_friendly_error_message pattern
+ * See: https://gitlab.gnome.org/GNOME/gdm/-/blob/main/daemon/gdm-session-worker.c:846
+ * SPDX-License-Identifier: GPL-2.0-or-later (for GDM reference pattern)
+ *
+ * Provides default messages that QML can use or override.
+ */
+QString PolkitWrapper::getDefaultErrorMessage(AuthenticationState state, AuthenticationMethod method) const
+{
+    switch (state) {
+    case AuthenticationState::MAX_RETRIES_EXCEEDED:
+        // GDM pattern: Different messages per authentication method
+        if (method == AuthenticationMethod::PASSWORD) {
+            return "You reached the maximum password authentication attempts. Please try another method.";
+        } else if (method == AuthenticationMethod::FIDO) {
+            return "You reached the maximum security key attempts. Please try password authentication.";
+        }
+        return "You reached the maximum authentication attempts. Please try again later.";
+
+    case AuthenticationState::AUTHENTICATION_FAILED:
+        // GDM pattern: Method-specific friendly messages
+        if (method == AuthenticationMethod::PASSWORD) {
+            return "Incorrect password. Please try again.";
+        } else if (method == AuthenticationMethod::FIDO) {
+            return "Security key authentication failed. Please try again.";
+        }
+        return "Authentication failed. Please try again.";
+
+    case AuthenticationState::ERROR:
+        return "An error occurred during authentication. Please try again.";
+
+    case AuthenticationState::CANCELLED:
+        return "Authentication was cancelled.";
+
+    // States that shouldn't produce user-facing errors
+    case AuthenticationState::IDLE:
+    case AuthenticationState::INITIATED:
+    case AuthenticationState::WAITING_FOR_PASSWORD:
+    case AuthenticationState::AUTHENTICATING:
+    case AuthenticationState::COMPLETED:
+        return "";  // No error for these states
+    }
+
+    return "An unexpected error occurred.";
+}
 

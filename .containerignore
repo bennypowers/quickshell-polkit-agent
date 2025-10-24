@@ -1,0 +1,29 @@
+# Build directories - prevent CMakeCache conflicts in container
+build/
+build-*/
+cmake-build-*/
+
+# IDE files
+.vscode/
+.idea/
+
+# Git
+.git/
+
+# Test results
+tests/e2e/test-results/
+tests/security/reports/
+Testing/
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# Generated files
+*_autogen/
+moc_*.cpp
+moc_*.h
+*.moc
+ui_*.h
+qrc_*.cpp

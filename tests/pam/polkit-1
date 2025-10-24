@@ -1,0 +1,32 @@
+#%PAM-1.0
+# PAM configuration for polkit-1 service (used by PolkitQt1::Agent::Session)
+#
+# This configuration is used by pam_wrapper for testing authentication flows
+# without affecting the system PAM configuration.
+#
+# For testing with pam_wrapper:
+#   export PAM_WRAPPER=1
+#   export PAM_WRAPPER_SERVICE_DIR=/path/to/tests/pam
+#   export LD_PRELOAD=/path/to/libpam_wrapper.so
+#
+# For FIDO mock testing:
+#   export MOCK_NFC_READER=1 (to simulate NFC reader presence)
+#   export FIDO_TEST_MODE=success|timeout|fail|unavailable
+#   export FIDO_TEST_DELAY=<ms> (optional, default 1000)
+
+# Try FIDO authentication first (if pam_fido_mock.so is available)
+# This will check FIDO_TEST_MODE environment variable
+# Module must be in the same directory as this config file
+auth        sufficient    pam_fido_mock.so
+
+# Fallback to always-succeed for basic testing
+auth        required      pam_permit.so
+
+# Account management
+account     required      pam_permit.so
+
+# Password management - not used for polkit auth
+password    required      pam_permit.so
+
+# Session management - not used for polkit auth
+session     required      pam_permit.so

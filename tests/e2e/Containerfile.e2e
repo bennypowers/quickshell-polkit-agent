@@ -1,0 +1,83 @@
+# Containerfile for end-to-end testing with real polkit daemon
+# Based on Fedora for polkit/dbus infrastructure
+FROM fedora:latest
+
+# Install dependencies for building and running polkit agent with real polkit daemon
+RUN dnf install -y \
+    cmake \
+    gcc \
+    gcc-c++ \
+    make \
+    qt6-qtbase-devel \
+    qt6-qtdeclarative-devel \
+    polkit-qt6-1-devel \
+    polkit \
+    pam-devel \
+    pam_wrapper \
+    libpamtest \
+    libpamtest-devel \
+    dbus-daemon \
+    dbus-x11 \
+    python3 \
+    python3-dbus \
+    python3-gobject \
+    procps-ng \
+    util-linux \
+    sudo \
+    which \
+    && dnf clean all
+
+# Create test user (non-root user for testing authentication)
+RUN useradd -m -s /bin/bash testuser && \
+    echo "testuser:testpass" | chpasswd && \
+    usermod -aG wheel testuser
+
+# Set up working directory
+WORKDIR /workspace
+
+# Copy source code
+COPY . /workspace/
+
+# Install test polkit policy and rules
+RUN mkdir -p /etc/polkit-1/rules.d /usr/share/polkit-1/actions && \
+    cp /workspace/tests/e2e/polkit-test-rules.conf /etc/polkit-1/rules.d/50-test-actions.rules && \
+    cp /workspace/tests/e2e/org.quickshell.polkit.test.policy /usr/share/polkit-1/actions/
+
+# Build the agent and PAM mock modules
+RUN mkdir -p build && \
+    cd build && \
+    cmake .. -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug && \
+    make -j$(nproc) && \
+    # Install mock PAM module for FIDO testing \
+    if [ -f tests/pam/pam_fido_mock.so ]; then \
+        cp tests/pam/pam_fido_mock.so /usr/lib64/security/ ; \
+        echo "Installed pam_fido_mock.so for FIDO testing" ; \
+    fi && \
+    # Create PAM configuration for polkit-1 with FIDO mock \
+    echo '#%PAM-1.0' > /etc/pam.d/polkit-1 && \
+    echo '# PAM configuration for polkit-1 with FIDO mock for testing' >> /etc/pam.d/polkit-1 && \
+    echo '' >> /etc/pam.d/polkit-1 && \
+    echo '# Try FIDO authentication first (mock module for testing)' >> /etc/pam.d/polkit-1 && \
+    echo 'auth    sufficient    pam_fido_mock.so' >> /etc/pam.d/polkit-1 && \
+    echo '' >> /etc/pam.d/polkit-1 && \
+    echo '# Fallback to standard Unix authentication' >> /etc/pam.d/polkit-1 && \
+    echo 'auth    include    system-auth' >> /etc/pam.d/polkit-1 && \
+    echo 'account include    system-auth' >> /etc/pam.d/polkit-1 && \
+    echo 'password include    system-auth' >> /etc/pam.d/polkit-1 && \
+    echo 'session include    system-auth' >> /etc/pam.d/polkit-1 && \
+    cat /etc/pam.d/polkit-1 && \
+    echo "Created PAM configuration for polkit-1"
+
+# Set up polkit authentication helper to be setuid root
+# This is required for PAM authentication to work
+RUN if [ -f /usr/lib/polkit-1/polkit-agent-helper-1 ]; then \
+        chmod 4755 /usr/lib/polkit-1/polkit-agent-helper-1 ; \
+        echo "Set polkit-agent-helper-1 as setuid root" ; \
+    elif [ -f /usr/libexec/polkit-1/polkit-agent-helper-1 ]; then \
+        chmod 4755 /usr/libexec/polkit-1/polkit-agent-helper-1 ; \
+        echo "Set polkit-agent-helper-1 as setuid root (libexec)" ; \
+    fi
+
+# Start dbus-daemon as part of container startup
+# Tests will run as testuser with dbus session
+CMD ["/bin/bash"]

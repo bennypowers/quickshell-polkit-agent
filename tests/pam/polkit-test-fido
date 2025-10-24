@@ -1,0 +1,14 @@
+#%PAM-1.0
+# Mock PAM configuration for basic testing
+# Used by pam_wrapper for basic test scenarios
+#
+# This config uses pam_permit.so which always permits authentication
+# without performing any security checks. Use this for simple tests only.
+#
+# Note: FIDO authentication simulation is implemented via pam_fido_mock.so
+# in the polkit-1 and polkit-1-fido configs, not in this file.
+
+auth     sufficient   pam_permit.so
+account  sufficient   pam_permit.so
+password sufficient   pam_permit.so
+session  sufficient   pam_permit.so

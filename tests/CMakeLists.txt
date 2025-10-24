@@ -48,6 +48,81 @@ add_executable(test-localsocket-validation
 target_link_libraries(test-localsocket-validation Qt6::Test Qt6::Core Qt6::Network)
 add_test(NAME LocalSocketValidation COMMAND test-localsocket-validation)
 
+# Authentication state machine integration tests
+find_package(PolkitQt6-1 REQUIRED)
+add_executable(test-authentication-state-integration
+    test-authentication-state-integration.cpp
+    ../src/polkit-wrapper.cpp
+    ../src/nfc-detector.cpp
+    ../src/logging.cpp
+)
+
+# Enable test-only methods
+target_compile_definitions(test-authentication-state-integration PRIVATE BUILD_TESTING=1)
+
+target_link_libraries(test-authentication-state-integration
+    Qt6::Test
+    Qt6::Core
+    Qt6::Network
+    PolkitQt6-1::Core
+    PolkitQt6-1::Agent
+)
+
+# NOTE: AuthenticationStateIntegration is run in E2E container environment only
+# It requires polkit-agent-helper-1 to be setuid root, which is not safe for local development
+# The test binary is still built (for use in E2E), but not registered with CTest
+# Run via: ./tests/e2e/run-podman-e2e.sh
+# add_test(NAME AuthenticationStateIntegration COMMAND test-authentication-state-integration)
+
+# Performance and stress tests
+add_executable(test-performance-stress
+    test-performance-stress.cpp
+    ../src/polkit-wrapper.cpp
+    ../src/nfc-detector.cpp
+    ../src/logging.cpp
+)
+
+# Enable test-only methods
+target_compile_definitions(test-performance-stress PRIVATE BUILD_TESTING=1)
+
+target_link_libraries(test-performance-stress
+    Qt6::Test
+    Qt6::Core
+    Qt6::Network
+    PolkitQt6-1::Core
+    PolkitQt6-1::Agent
+)
+
+add_test(NAME PerformanceStress COMMAND test-performance-stress)
+
+# Configure PAM mock build
+# Note: AuthenticationStateIntegration test is container-only (not in CTest)
+# PAM wrapper configuration is handled by E2E runner script
+find_library(PAM_WRAPPER_LIBRARY NAMES pam_wrapper)
+if(PAM_WRAPPER_LIBRARY)
+    message(STATUS "Found pam_wrapper: ${PAM_WRAPPER_LIBRARY}")
+
+    # Set up environment for PAM mocking
+    set(PAM_WRAPPER_SERVICE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/pam")
+
+    # Copy pam_fido_mock.so to service directory so PAM can find it
+    if(TARGET pam_fido_mock)
+        add_custom_command(TARGET test-authentication-state-integration POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy
+                $<TARGET_FILE:pam_fido_mock>
+                ${PAM_WRAPPER_SERVICE_DIR}/pam_fido_mock.so
+            COMMENT "Copying pam_fido_mock.so to PAM service directory"
+        )
+    endif()
+
+    message(STATUS "PAM wrapper available for E2E container tests")
+    message(STATUS "  Service dir: ${PAM_WRAPPER_SERVICE_DIR}")
+else()
+    message(WARNING "pam_wrapper not found - E2E auth tests will be skipped")
+    message(WARNING "  Install with: sudo dnf install pam_wrapper (Fedora)")
+    message(WARNING "            or: sudo apt install libpam-wrapper (Debian/Ubuntu)")
+endif()
+
 # Add Python security tests
 find_program(PYTHON3_EXECUTABLE python3)
 if(PYTHON3_EXECUTABLE)
@@ -96,7 +171,7 @@ endif()
 # Add custom target to run all tests
 add_custom_target(run-tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-    DEPENDS test-message-validator test-security test-simple-integration test-localsocket-validation
+    DEPENDS test-message-validator test-security test-simple-integration test-localsocket-validation test-authentication-state-integration test-performance-stress
     COMMENT "Running all tests"
 )
 
@@ -105,3 +180,39 @@ add_custom_target(run-security-tests
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --tests-regex "Security|Fuzz|Permission|Replay|RateLimit|Audit|UIConfusion"
     COMMENT "Running security tests only"
 )
+
+# E2E polkit authorization trigger helper
+add_executable(trigger-polkit-action
+    e2e/trigger-polkit-action.cpp
+)
+target_link_libraries(trigger-polkit-action
+    Qt6::Core
+    PolkitQt6-1::Core
+)
+
+# E2E tests with Podman
+find_program(PODMAN_EXECUTABLE podman)
+if(PODMAN_EXECUTABLE)
+    add_test(NAME E2EPodman
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/e2e/run-podman-e2e.sh
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    set_tests_properties(E2EPodman PROPERTIES
+        TIMEOUT 300
+        LABELS "e2e;integration"
+    )
+    message(STATUS "Podman found: E2E tests enabled")
+else()
+    message(WARNING "Podman not found: E2E tests disabled")
+    message(WARNING "  Install with: sudo dnf install podman (Fedora)")
+    message(WARNING "            or: sudo apt install podman (Debian/Ubuntu)")
+endif()
+
+# Add custom target to run only e2e tests
+add_custom_target(run-e2e-tests
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --tests-regex "E2E"
+    COMMENT "Running E2E tests only"
+)
+
+# Build mock PAM modules for testing
+add_subdirectory(pam)
