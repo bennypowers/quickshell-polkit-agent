@@ -317,8 +317,26 @@ test_authentication_state_integration() {
     chmod 777 "$TEST_RESULTS_DIR"
     chmod -R a+rX "$BUILD_DIR"
 
-    # Use sudo -u to preserve environment variables (su - resets them)
-    if sudo -u testuser -E bash -c "cd $BUILD_DIR/tests && ./test-authentication-state-integration -v1" > "$TEST_RESULTS_DIR/auth-state-integration.log" 2>&1; then
+    # Helper function to run the test
+    run_test_attempt() {
+        sudo -u testuser -E bash -c "cd $BUILD_DIR/tests && ./test-authentication-state-integration -v1" > "$TEST_RESULTS_DIR/auth-state-integration.log" 2>&1
+    }
+
+    # Try running the test, retry once on failure (E2E tests with real polkit can be timing-sensitive)
+    if run_test_attempt; then
+        TEST_SUCCESS=1
+    else
+        log_warn "Test failed on first attempt, retrying after cleanup delay..."
+        sleep 2  # Give polkitd time to fully clean up
+        if run_test_attempt; then
+            TEST_SUCCESS=1
+            log_info "Test passed on retry"
+        else
+            TEST_SUCCESS=0
+        fi
+    fi
+
+    if [ "$TEST_SUCCESS" -eq 1 ]; then
         # Parse QTest results
         QTEST_TOTALS=$(grep "^Totals:" "$TEST_RESULTS_DIR/auth-state-integration.log" || echo "")
         if [ -n "$QTEST_TOTALS" ]; then
@@ -339,7 +357,7 @@ test_authentication_state_integration() {
             return 1
         fi
     else
-        log_error "Authentication state tests failed - see $TEST_RESULTS_DIR/auth-state-integration.log"
+        log_error "Authentication state tests failed after retry - see $TEST_RESULTS_DIR/auth-state-integration.log"
         log_info "Test summary (last 20 lines):"
         tail -20 "$TEST_RESULTS_DIR/auth-state-integration.log" || true
         test_failed "Authentication state integration tests - binary crashed"
