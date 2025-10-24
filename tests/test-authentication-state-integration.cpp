@@ -70,6 +70,12 @@ void TestAuthenticationStateIntegration::initTestCase()
 
 void TestAuthenticationStateIntegration::init()
 {
+    // In E2E mode, add a short delay before creating wrapper to ensure
+    // polkitd has fully cleaned up from previous test
+    if (qgetenv("POLKIT_E2E_MODE") == "1") {
+        QTest::qWait(100);
+    }
+
     // Create mock NFC detector (default: no NFC reader present)
     m_mockNfc = new MockNfcDetector(false);
 
