@@ -223,15 +223,8 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
                         }
                     }
 
-                    // Determine cleanup strategy before completing AsyncResult
-                    // (completing result may trigger polkit cleanup)
-                    bool hasAsyncResult = (session->result != nullptr);
-                    bool shouldCleanup = gainedAuthorization ||
-                                        session->state == AuthenticationState::MAX_RETRIES_EXCEEDED ||
-                                        hasAsyncResult;
-
                     // Complete the AsyncResult for polkit daemon
-                    // IMPORTANT: Do this AFTER determining cleanup strategy but BEFORE cleanup
+                    // The polkit daemon will call initiateAuthentication() again for retries
                     if (session->result) {
                         if (gainedAuthorization) {
                             session->result->setCompleted();
@@ -243,22 +236,9 @@ void PolkitWrapper::initiateAuthentication(const QString &actionId,
 
                     emit authorizationResult(gainedAuthorization, actionId);
 
-                    // Clean up or restart session
-                    if (shouldCleanup) {
-                        cleanupSession(cookie);
-                    } else {
-                        // Test harness mode: restart PAM session for retry
-                        qCDebug(polkitAgent) << "Restarting PAM session for retry (test harness mode)";
-
-                        // Transition back to WAITING_FOR_PASSWORD to allow retry
-                        setState(cookie, AuthenticationState::WAITING_FOR_PASSWORD);
-
-                        // NOTE: We keep the existing session and just call initiate() again
-                        // The session will reconnect and PAM will prompt for password again
-                        if (session->session) {
-                            session->session->initiate();
-                        }
-                    }
+                    // Always cleanup session after completion
+                    // Let polkit daemon handle retries by calling initiateAuthentication() again
+                    cleanupSession(cookie);
                 });
 
         connect(pamSession, &PolkitQt1::Agent::Session::request,
