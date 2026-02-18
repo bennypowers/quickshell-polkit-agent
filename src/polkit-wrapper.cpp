@@ -25,6 +25,7 @@
 #include "logging.h"
 #include <QTimer>
 #include <unistd.h>
+#include <systemd/sd-login.h>
 
 PolkitWrapper::PolkitWrapper(INfcDetector *nfcDetector, QObject *parent)
     : PolkitQt1::Agent::Listener(parent)
@@ -56,10 +57,62 @@ PolkitWrapper::~PolkitWrapper()
     }
 }
 
+/*
+ * Resolve the logind session ID using the same logic polkit uses internally.
+ *
+ * polkit's session monitor (polkitbackendsessionmonitor-systemd.c) resolves
+ * the caller's session via:
+ *   1. sd_pid_get_session(pid) — direct cgroup lookup
+ *   2. sd_uid_get_display(uid) — fallback to the user's "display" session
+ *
+ * By matching this resolution order, the session we register for will always
+ * agree with what polkit resolves for our PID, so RegisterAuthenticationAgent
+ * succeeds in both direct-launch and user-service cases.
+ */
+static QString resolveSessionId()
+{
+    char *session = nullptr;
+
+    // 1. Direct session lookup — works when agent runs inside a session
+    int r = sd_pid_get_session(getpid(), &session);
+    if (r >= 0 && session) {
+        QString id = QString::fromUtf8(session);
+        free(session);
+        qCDebug(polkitAgent) << "sd_pid_get_session resolved session:" << id;
+        return id;
+    }
+
+    // 2. Display-session fallback — works when agent is a user service
+    r = sd_uid_get_display(getuid(), &session);
+    if (r >= 0 && session) {
+        QString id = QString::fromUtf8(session);
+        free(session);
+        qCDebug(polkitAgent) << "sd_uid_get_display resolved display session:" << id;
+
+        QString envSession = qgetenv("XDG_SESSION_ID");
+        if (!envSession.isEmpty() && envSession != id) {
+            qCWarning(polkitAgent) << "XDG_SESSION_ID" << envSession
+                                   << "differs from display session" << id
+                                   << "— using display session";
+        }
+        return id;
+    }
+
+    // 3. Graceful degradation — fall back to XDG_SESSION_ID if set
+    QString envSession = qgetenv("XDG_SESSION_ID");
+    if (!envSession.isEmpty()) {
+        qCDebug(polkitAgent) << "Falling back to XDG_SESSION_ID:" << envSession;
+        return envSession;
+    }
+
+    // 4. No session found
+    qCWarning(polkitAgent) << "Could not resolve any logind session";
+    return {};
+}
+
 bool PolkitWrapper::registerAgent()
 {
-    // Create subject for current session
-    QString sessionId = qgetenv("XDG_SESSION_ID");
+    QString sessionId = resolveSessionId();
 
     bool success;
     if (!sessionId.isEmpty()) {
